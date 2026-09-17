@@ -1,0 +1,34 @@
+# Local secrets
+.env
+.env.*
+!.env.example
+
+# Android / Gradle
+.gradle/
+.kotlin/
+.toolchains/
+local.properties
+**/build/
+captures/
+.idea/
+*.iml
+
+# Signing material
+*.jks
+*.keystore
+keystore.properties
+.secrets/
+
+# Local app data and generated packages
+local-data/
+backups/
+artifacts/
+tmp/
+node_modules/
+plugin/**/server/data/
+*.apk
+*.aab
+
+# OS and editor files
+.DS_Store
+Thumbs.db

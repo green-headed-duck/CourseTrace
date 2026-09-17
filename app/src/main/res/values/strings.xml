@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">课迹</string>
+    <string name="widget_description">显示当前或下一节课程</string>
+</resources>

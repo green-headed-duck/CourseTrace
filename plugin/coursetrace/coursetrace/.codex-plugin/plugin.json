@@ -1,0 +1,20 @@
+{
+  "name": "coursetrace",
+  "version": "0.1.0",
+  "description": "Connect ChatGPT classroom conversations to the CourseTrace Android timetable and local learning record.",
+  "author": {
+    "name": "CourseTrace"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "课迹 CourseTrace",
+    "shortDescription": "把课堂聊天、痛点与进度同步到课迹。",
+    "longDescription": "识别当前课程或自学项目，按事件顺序保存课堂原文、问题、错题、痛点和进度，并依据上节课记录谨慎预测下节资料。",
+    "developerName": "CourseTrace",
+    "category": "Productivity",
+    "capabilities": ["Skills", "MCP"],
+    "defaultPrompt": "结合当前课表识别我正在上的课，开始按事件顺序记录课堂讨论；下课时保存原文完整性状态、结构化痛点和进度。"
+  },
+  "mcpServers": "./.mcp.json",
+  "apps": "./.app.json"
+}

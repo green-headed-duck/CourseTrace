@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "coursetrace": {
+      "command": "node",
+      "args": ["./server/dist/index.js", "--stdio"],
+      "cwd": ".",
+      "enabled": false,
+      "startup_timeout_sec": 15,
+      "tool_timeout_sec": 60,
+      "default_tools_approval_mode": "approve",
+      "tools": {
+        "finish_class_session": { "approval_mode": "prompt" },
+        "create_timetable_import_draft": { "approval_mode": "prompt" }
+      },
+      "env_vars": ["COURSETRACE_DATA_DIR", "COURSETRACE_PAIRING_TOKEN"]
+    }
+  }
+}
