@@ -341,7 +341,7 @@ fun ScheduleScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    OutlinedButton(onClick = onManageTerms) { Text("学期") }
+                    OutlinedButton(onClick = onManageTerms) { Text("学期设置") }
                 }
             }
             item {

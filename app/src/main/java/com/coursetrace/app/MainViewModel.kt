@@ -38,6 +38,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import java.security.MessageDigest
 import java.time.LocalDate
+import java.time.DayOfWeek
 import java.time.OffsetDateTime
 import java.time.LocalTime
 
@@ -406,13 +407,39 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun addTerm(name: String, startDate: String, weekCount: Int) {
         viewModelScope.launch {
             runCatching {
-                require(name.isNotBlank()) { "学期名称不能为空" }
-                LocalDate.parse(startDate)
-                require(weekCount in 1..30) { "周数应在 1 到 30 之间" }
-                app.repository.addTerm(Term(name = name.trim(), startDate = startDate, weekCount = weekCount))
+                val date = validateTermInput(name, startDate, weekCount)
+                app.repository.addTerm(Term(name = name.trim(), startDate = date.toString(), weekCount = weekCount))
+                NotificationScheduler(app).reschedule(app.repository.state.value)
             }.onSuccess { _workStatus.value = WorkStatus(message = "已创建并切换到新学期") }
                 .onFailure(::showError)
         }
+    }
+
+    fun updateTerm(termId: String, name: String, startDate: String, weekCount: Int) {
+        viewModelScope.launch {
+            runCatching {
+                val old = appState.value.terms.find { it.id == termId } ?: error("学期不存在")
+                val date = validateTermInput(name, startDate, weekCount, termId)
+                app.repository.updateTerm(
+                    old.copy(name = name.trim(), startDate = date.toString(), weekCount = weekCount),
+                )
+                NotificationScheduler(app).reschedule(app.repository.state.value)
+            }.onSuccess { _workStatus.value = WorkStatus(message = "学期信息已保存") }
+                .onFailure(::showError)
+        }
+    }
+
+    private fun validateTermInput(name: String, startDate: String, weekCount: Int, editingId: String? = null): LocalDate {
+        require(name.isNotBlank()) { "学期名称不能为空" }
+        val date = runCatching { LocalDate.parse(startDate) }.getOrElse {
+            error("日期格式应为 YYYY-MM-DD")
+        }
+        require(date.dayOfWeek == DayOfWeek.MONDAY) { "第一教学周起始日必须是周一" }
+        require(weekCount in 1..40) { "教学周数应在 1 到 40 之间" }
+        require(appState.value.terms.none {
+            it.id != editingId && !it.archived && it.name.equals(name.trim(), ignoreCase = true)
+        }) { "已有同名学期" }
+        return date
     }
 
     fun calibrateCurrentTermWeek(currentWeek: Int) {
@@ -431,11 +458,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun selectTerm(termId: String) {
-        viewModelScope.launch { app.repository.setActiveTerm(termId) }
+        viewModelScope.launch {
+            runCatching {
+                app.repository.setActiveTerm(termId)
+                NotificationScheduler(app).reschedule(app.repository.state.value)
+            }.onSuccess { _workStatus.value = WorkStatus(message = "已切换当前学期") }
+                .onFailure(::showError)
+        }
     }
 
     fun archiveTerm(termId: String) {
-        viewModelScope.launch { app.repository.archiveTerm(termId) }
+        viewModelScope.launch {
+            runCatching {
+                app.repository.archiveTerm(termId)
+                NotificationScheduler(app).reschedule(app.repository.state.value)
+            }.onSuccess { _workStatus.value = WorkStatus(message = "学期已归档，课程和记录仍保留") }
+                .onFailure(::showError)
+        }
+    }
+
+    fun restoreTerm(termId: String) {
+        viewModelScope.launch {
+            runCatching {
+                app.repository.restoreTerm(termId)
+                NotificationScheduler(app).reschedule(app.repository.state.value)
+            }.onSuccess { _workStatus.value = WorkStatus(message = "已恢复并切换到该学期") }
+                .onFailure(::showError)
+        }
     }
 
     fun addProject(name: String, description: String) {

@@ -73,7 +73,11 @@ class AppRepository(context: Context) {
 
     private fun defaultState(): AppState {
         val term = AcademicTermPolicy.defaultTerm()
-        return AppState(terms = listOf(term), activeTermId = term.id)
+        return AppState(
+            schemaVersion = AcademicTermPolicy.currentSchemaVersion,
+            terms = listOf(term),
+            activeTermId = term.id,
+        )
     }
 
     private fun load(): AppState = runCatching {
@@ -114,26 +118,45 @@ class AppRepository(context: Context) {
 
     suspend fun addTerm(term: Term, makeActive: Boolean = true) =
         update("新增学期：${term.name}") {
+            require(it.terms.none { existing -> !existing.archived && existing.name.equals(term.name, ignoreCase = true) }) {
+                "已有同名学期"
+            }
             it.copy(
                 terms = it.terms + term,
                 activeTermId = if (makeActive) term.id else it.activeTermId,
             )
         }
 
-    suspend fun updateTerm(term: Term) = update("校准学期教学周：${term.name}") { state ->
+    suspend fun updateTerm(term: Term) = update("更新学期：${term.name}") { state ->
         require(state.terms.any { it.id == term.id }) { "学期不存在" }
         state.copy(terms = state.terms.map { if (it.id == term.id) term else it })
     }
 
     suspend fun setActiveTerm(termId: String) = update("切换当前学期") { state ->
-        require(state.terms.any { it.id == termId }) { "学期不存在" }
+        require(state.terms.any { it.id == termId && !it.archived }) { "学期不存在或已归档" }
         state.copy(activeTermId = termId)
     }
 
     suspend fun archiveTerm(termId: String) = update("归档学期") { state ->
+        val term = state.terms.find { it.id == termId } ?: error("学期不存在")
+        require(!term.archived) { "学期已归档" }
+        require(state.terms.count { !it.archived } > 1) { "至少需要保留一个使用中的学期" }
         val updated = state.terms.map { if (it.id == termId) it.copy(archived = true) else it }
-        val nextActive = if (state.activeTermId == termId) updated.firstOrNull { !it.archived }?.id else state.activeTermId
+        val nextActive = if (state.activeTermId == termId) {
+            updated.filterNot { it.archived }.maxByOrNull { it.startDate }?.id
+        } else {
+            state.activeTermId
+        }
         state.copy(terms = updated, activeTermId = nextActive)
+    }
+
+    suspend fun restoreTerm(termId: String) = update("恢复学期") { state ->
+        val term = state.terms.find { it.id == termId } ?: error("学期不存在")
+        require(term.archived) { "学期未归档" }
+        state.copy(
+            terms = state.terms.map { if (it.id == termId) it.copy(archived = false) else it },
+            activeTermId = termId,
+        )
     }
 
     suspend fun upsertCourse(course: Course, slots: List<CourseSlot> = emptyList()) =

@@ -31,6 +31,7 @@ class AcademicTermPolicyTest {
         assertEquals("2026-08-31", repaired.terms.single().startDate)
         assertEquals(22, repaired.terms.single().weekCount)
         assertEquals(course, repaired.courses.single())
+        assertEquals(AcademicTermPolicy.currentSchemaVersion, repaired.schemaVersion)
     }
 
     @Test
@@ -38,6 +39,30 @@ class AcademicTermPolicyTest {
         assertEquals(
             LocalDate.of(2026, 8, 31),
             AcademicTermPolicy.startDateForCurrentWeek(LocalDate.of(2026, 9, 18), 3),
+        )
+    }
+
+    @Test
+    fun migrationDoesNotOverwriteLaterUserChanges() {
+        val term = Term(name = "自定义学期", startDate = "2026-09-07", weekCount = 18)
+        val alreadyMigrated = AppState(
+            schemaVersion = AcademicTermPolicy.currentSchemaVersion,
+            terms = listOf(term),
+            activeTermId = term.id,
+        )
+
+        assertEquals(alreadyMigrated, AcademicTermPolicy.repairKnown2026Term(alreadyMigrated))
+    }
+
+    @Test
+    fun suggestsAcademicYearAndSemesterFromStartDate() {
+        assertEquals(
+            "2026-2027学年第1学期",
+            AcademicTermPolicy.suggestedName(LocalDate.of(2026, 8, 31)),
+        )
+        assertEquals(
+            "2026-2027学年第2学期",
+            AcademicTermPolicy.suggestedName(LocalDate.of(2027, 2, 22)),
         )
     }
 }

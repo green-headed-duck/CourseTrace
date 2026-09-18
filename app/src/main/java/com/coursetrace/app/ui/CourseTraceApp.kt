@@ -272,10 +272,13 @@ fun CourseTraceApp(viewModel: MainViewModel) {
         ManageTermsDialog(
             terms = appState.terms,
             activeTermId = appState.activeTermId,
+            courseCounts = appState.courses.filterNot { it.archived }.groupingBy { it.termId }.eachCount(),
             onDismiss = { showTermManager = false },
             onSelect = viewModel::selectTerm,
             onAdd = viewModel::addTerm,
+            onUpdate = viewModel::updateTerm,
             onArchive = viewModel::archiveTerm,
+            onRestore = viewModel::restoreTerm,
             onCalibrateCurrentWeek = viewModel::calibrateCurrentTermWeek,
         )
     }

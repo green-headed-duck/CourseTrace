@@ -35,6 +35,7 @@ import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -47,6 +48,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -61,6 +64,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.RoundedCornerShape
+import com.coursetrace.app.domain.AcademicTermPolicy
 import com.coursetrace.app.domain.ScheduleEngine
 import com.coursetrace.app.model.AppState
 import com.coursetrace.app.model.Course
@@ -301,74 +306,287 @@ fun BackupPasswordDialog(restore: Boolean = false, onDismiss: () -> Unit, onConf
 fun ManageTermsDialog(
     terms: List<Term>,
     activeTermId: String?,
+    courseCounts: Map<String, Int>,
     onDismiss: () -> Unit,
     onSelect: (String) -> Unit,
     onAdd: (String, String, Int) -> Unit,
+    onUpdate: (String, String, String, Int) -> Unit,
     onArchive: (String) -> Unit,
+    onRestore: (String) -> Unit,
     onCalibrateCurrentWeek: (Int) -> Unit,
 ) {
     val activeTerm = terms.find { it.id == activeTermId }
-    var name by remember { mutableStateOf("") }
-    var startDate by remember { mutableStateOf(java.time.LocalDate.now().toString()) }
-    var weeks by remember { mutableStateOf("20") }
-    var currentWeek by remember(activeTermId, activeTerm?.startDate) {
+    val today = LocalDate.now()
+    var creating by remember { mutableStateOf(false) }
+    var editingId by remember { mutableStateOf<String?>(null) }
+    val editingTerm = terms.find { it.id == editingId }
+    val suggestedStart = remember(terms, activeTermId) {
+        activeTerm?.let { term ->
+            runCatching { LocalDate.parse(term.startDate).plusWeeks(term.weekCount.toLong()) }.getOrNull()
+        } ?: today.minusDays((today.dayOfWeek.value - 1).toLong())
+    }
+    var editorName by remember(creating, editingId) {
         mutableStateOf(
-            activeTerm?.let { ScheduleEngine.weekNumber(it, LocalDate.now()).coerceAtLeast(1).toString() } ?: "1",
+            if (creating) AcademicTermPolicy.suggestedName(suggestedStart) else editingTerm?.name.orEmpty(),
         )
     }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("学期管理") },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    terms.filterNot { it.archived }.forEach { term ->
-                        FilterChip(
-                            selected = term.id == activeTermId,
-                            onClick = { onSelect(term.id) },
-                            label = { Text(term.name) },
-                        )
-                    }
-                }
-                if (activeTerm != null) {
-                    Text("当前学期校准", fontWeight = FontWeight.SemiBold)
+    var editorStartDate by remember(creating, editingId) {
+        mutableStateOf(if (creating) suggestedStart.toString() else editingTerm?.startDate.orEmpty())
+    }
+    var editorWeeks by remember(creating, editingId) {
+        mutableStateOf(if (creating) "20" else editingTerm?.weekCount?.toString().orEmpty())
+    }
+    val parsedEditorDate = runCatching { LocalDate.parse(editorStartDate) }.getOrNull()
+    val parsedEditorWeeks = editorWeeks.toIntOrNull()
+    val duplicateName = terms.any {
+        it.id != editingId && !it.archived && it.name.equals(editorName.trim(), ignoreCase = true)
+    }
+    val editorError = when {
+        editorName.isBlank() -> "请输入学期名称"
+        duplicateName -> "已有同名学期"
+        parsedEditorDate == null -> "日期格式应为 YYYY-MM-DD"
+        parsedEditorDate.dayOfWeek.value != 1 -> "第一教学周起始日必须是周一"
+        parsedEditorWeeks == null || parsedEditorWeeks !in 1..40 -> "教学周数应在 1 到 40 之间"
+        else -> null
+    }
+
+    if (creating || editingTerm != null) {
+        AlertDialog(
+            onDismissRequest = {
+                creating = false
+                editingId = null
+            },
+            title = { Text(if (creating) "新建学期" else "编辑学期") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
-                        "起始日 ${activeTerm.startDate} · 今天第 ${ScheduleEngine.weekNumber(activeTerm, LocalDate.now())} 周",
+                        "开学日期指第一教学周的周一，用它计算所有课程所属周次。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        OutlinedTextField(
-                            value = currentWeek,
-                            onValueChange = { currentWeek = it.filter(Char::isDigit) },
-                            label = { Text("今天是第几周") },
-                            modifier = Modifier.weight(1f),
-                            singleLine = true,
+                    OutlinedTextField(
+                        value = editorName,
+                        onValueChange = { editorName = it },
+                        label = { Text("学期名称") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = editorStartDate,
+                        onValueChange = { editorStartDate = it.trim() },
+                        label = { Text("第一教学周的周一") },
+                        supportingText = { Text("格式：YYYY-MM-DD") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = editorWeeks,
+                        onValueChange = { editorWeeks = it.filter(Char::isDigit) },
+                        label = { Text("教学周数") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    if (editorError != null) {
+                        Text(editorError, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (!creating && editingTerm != null) {
+                        Text(
+                            "修改周次锚点不会删除课程或记录，但会改变课程对应的日历日期。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        Button(
-                            onClick = { currentWeek.toIntOrNull()?.let(onCalibrateCurrentWeek) },
-                            enabled = currentWeek.toIntOrNull()?.let { it in 1..40 } == true,
-                        ) { Text("校准") }
                     }
                 }
-                HorizontalDivider()
-                Text("新学期", fontWeight = FontWeight.SemiBold)
-                OutlinedTextField(name, { name = it }, label = { Text("名称") }, singleLine = true)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(startDate, { startDate = it }, label = { Text("开学日期 YYYY-MM-DD") }, modifier = Modifier.weight(2f), singleLine = true)
-                    OutlinedTextField(weeks, { weeks = it.filter(Char::isDigit) }, label = { Text("周数") }, modifier = Modifier.weight(1f), singleLine = true)
-                }
+            },
+            confirmButton = {
                 Button(
-                    onClick = { onAdd(name, startDate, weeks.toIntOrNull() ?: 20); name = "" },
-                    enabled = name.isNotBlank(),
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("创建并切换") }
-                if (activeTermId != null && terms.count { !it.archived } > 1) {
-                    TextButton(onClick = { onArchive(activeTermId) }, modifier = Modifier.align(Alignment.End)) {
-                        Text("归档当前学期")
+                    enabled = editorError == null,
+                    onClick = {
+                        val weekCount = parsedEditorWeeks ?: return@Button
+                        if (creating) {
+                            onAdd(editorName, editorStartDate, weekCount)
+                        } else {
+                            onUpdate(requireNotNull(editingId), editorName, editorStartDate, weekCount)
+                        }
+                        creating = false
+                        editingId = null
+                    },
+                ) { Text(if (creating) "创建并切换" else "保存") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    creating = false
+                    editingId = null
+                }) { Text("返回") }
+            },
+        )
+        return
+    }
+
+    var currentWeek by remember(activeTermId, activeTerm?.startDate) {
+        mutableStateOf(
+            activeTerm?.let { ScheduleEngine.weekNumber(it, today).coerceIn(1, it.weekCount).toString() } ?: "1",
+        )
+    }
+    var showCalibration by remember(activeTermId) { mutableStateOf(false) }
+    var showArchived by remember { mutableStateOf(false) }
+    var confirmArchive by remember(activeTermId) { mutableStateOf(false) }
+    val usableTerms = terms.filterNot { it.archived }
+    val archivedTerms = terms.filter { it.archived }
+    val otherTerms = usableTerms.filterNot { it.id == activeTermId }
+    val requestedWeek = currentWeek.toIntOrNull()
+    val calibratedStart = requestedWeek?.takeIf { it in 1..40 }?.let {
+        AcademicTermPolicy.startDateForCurrentWeek(today, it)
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("学期设置") },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    "课程表、提醒和桌面组件只使用当前学期。切换不会删除任何数据。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (activeTerm != null) {
+                    val week = ScheduleEngine.weekNumber(activeTerm, today)
+                    val timing = when {
+                        week < 1 -> "尚未开始 · 共 ${activeTerm.weekCount} 周"
+                        week > activeTerm.weekCount -> "已结束 · 共 ${activeTerm.weekCount} 周"
+                        else -> "第 $week 周 / 共 ${activeTerm.weekCount} 周"
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    ) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("当前学期", style = MaterialTheme.typography.labelMedium)
+                            Text(activeTerm.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text(timing)
+                            Text(
+                                "第一周周一 ${activeTerm.startDate} · ${courseCounts[activeTerm.id] ?: 0} 门课程",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(onClick = { editingId = activeTerm.id }) { Text("编辑信息") }
+                                TextButton(onClick = { showCalibration = !showCalibration }) {
+                                    Text(if (showCalibration) "收起校准" else "校准教学周")
+                                }
+                            }
+                        }
+                    }
+                    AnimatedVisibility(showCalibration) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("以今天为准校准", fontWeight = FontWeight.SemiBold)
+                            Text(
+                                "只调整第一周周一，不改变课程填写的上课周次。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                OutlinedTextField(
+                                    value = currentWeek,
+                                    onValueChange = { currentWeek = it.filter(Char::isDigit) },
+                                    label = { Text("今天是第几周") },
+                                    modifier = Modifier.weight(1f),
+                                    singleLine = true,
+                                )
+                                Button(
+                                    onClick = {
+                                        requestedWeek?.let(onCalibrateCurrentWeek)
+                                        showCalibration = false
+                                    },
+                                    enabled = calibratedStart != null,
+                                ) { Text("确认") }
+                            }
+                            calibratedStart?.let {
+                                Text(
+                                    "校准后：第一周周一为 $it",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    Text("尚未选择当前学期", color = MaterialTheme.colorScheme.error)
+                }
+
+                HorizontalDivider()
+                Text("切换学期", fontWeight = FontWeight.SemiBold)
+                if (otherTerms.isEmpty()) {
+                    Text(
+                        "暂无其他使用中的学期",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                otherTerms.sortedByDescending { it.startDate }.forEach { term ->
+                    ListItem(
+                        headlineContent = { Text(term.name) },
+                        supportingContent = {
+                            Text("${term.startDate} · ${term.weekCount} 周 · ${courseCounts[term.id] ?: 0} 门课程")
+                        },
+                        leadingContent = { RadioButton(selected = false, onClick = null) },
+                        trailingContent = { TextButton(onClick = { onSelect(term.id) }) { Text("切换") } },
+                        modifier = Modifier.clickable { onSelect(term.id) },
+                    )
+                }
+                OutlinedButton(onClick = { creating = true }, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Filled.Add, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("新建学期")
+                }
+
+                if (archivedTerms.isNotEmpty()) {
+                    TextButton(onClick = { showArchived = !showArchived }) {
+                        Icon(Icons.Outlined.Restore, null)
+                        Spacer(Modifier.width(6.dp))
+                        Text(if (showArchived) "收起已归档" else "已归档（${archivedTerms.size}）")
+                    }
+                    AnimatedVisibility(showArchived) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            archivedTerms.sortedByDescending { it.startDate }.forEach { term ->
+                                ListItem(
+                                    headlineContent = { Text(term.name) },
+                                    supportingContent = { Text("${term.startDate} · ${courseCounts[term.id] ?: 0} 门课程") },
+                                    trailingContent = {
+                                        TextButton(onClick = { onRestore(term.id) }) { Text("恢复并切换") }
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (activeTerm != null && usableTerms.size > 1) {
+                    HorizontalDivider()
+                    if (!confirmArchive) {
+                        TextButton(onClick = { confirmArchive = true }, modifier = Modifier.align(Alignment.End)) {
+                            Text("归档当前学期")
+                        }
+                    } else {
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                        ) {
+                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text("确认归档“${activeTerm.name}”？", fontWeight = FontWeight.SemiBold)
+                                Text("课程和学习记录会保留，可随时从已归档中恢复。", style = MaterialTheme.typography.bodySmall)
+                                Row(Modifier.align(Alignment.End)) {
+                                    TextButton(onClick = { confirmArchive = false }) { Text("取消") }
+                                    TextButton(onClick = {
+                                        onArchive(activeTerm.id)
+                                        confirmArchive = false
+                                    }) { Text("确认归档") }
+                                }
+                            }
+                        }
                     }
                 }
             }

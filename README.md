@@ -71,8 +71,8 @@ ChatGPT 无法被动读取其他历史会话。只有 Skill 活跃时追加或�
 ```powershell
 .\tools\sign-update-manifest.ps1 `
   -ApkPath .\app\build\outputs\apk\release\app-release.apk `
-  -VersionCode 11 -VersionName 0.2.7 `
-  -ApkUrl https://你的域名/downloads/coursetrace-0.2.7.apk
+  -VersionCode 12 -VersionName 0.2.8 `
+  -ApkUrl https://你的域名/downloads/coursetrace-0.2.8.apk
 ```
 
 把 APK 与生成的 `update-manifest.json` 放到 HTTPS 站点，在应用“更新设置”中填写清单地址。后续版本必须沿用同一 Android keystore 和更新清单私钥。
@@ -83,4 +83,4 @@ ChatGPT 无法被动读取其他历史会话。只有 Skill 活跃时追加或�
 
 ## 当前验证版本
 
-`0.2.7`（versionCode 11）修复中转站课表导入链路：界面按 PDF 页数和已返回字节量展示持续进度；同一时刻只允许一个导入/写入任务；PDF 使用 SHA-256 指纹避免重复导入；模型识别出的学期日期只作核对提示，不能再自动新建或切换学期。2026-2027 学年第 1 学期起点校准为 `2026-08-31`，因此 `2026-09-18` 为第 3 教学周；设置中的学期管理也可以随时按“今天是第几周”重新校准。
+`0.2.8`（versionCode 12）重做学期设置：当前学期摘要、教学周校准、学期编辑、切换、新建和归档恢复采用分层界面；学期变更后会同步重排提醒，旧版迁移也不会再覆盖用户手动设置。中转站课表导入继续使用单任务互斥、PDF 指纹去重和只写入当前学期的安全规则。2026-2027 学年第 1 学期起点为 `2026-08-31`，因此 `2026-09-18` 为第 3 教学周。
