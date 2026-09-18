@@ -68,8 +68,8 @@ ChatGPT 无法被动读取其他历史会话。只有 Skill 活跃时追加或�
 ```powershell
 .\tools\sign-update-manifest.ps1 `
   -ApkPath .\app\build\outputs\apk\release\app-release.apk `
-  -VersionCode 5 -VersionName 0.2.1 `
-  -ApkUrl https://你的域名/downloads/coursetrace-0.2.1.apk
+  -VersionCode 6 -VersionName 0.2.2 `
+  -ApkUrl https://你的域名/downloads/coursetrace-0.2.2.apk
 ```
 
 把 APK 与生成的 `update-manifest.json` 放到 HTTPS 站点，在应用“更新设置”中填写清单地址。后续版本必须沿用同一 Android keystore 和更新清单私钥。
@@ -80,4 +80,4 @@ ChatGPT 无法被动读取其他历史会话。只有 Skill 活跃时追加或�
 
 ## 当前验证版本
 
-`0.2.1`（versionCode 5）已在小米 K100、HyperOS 3、Android 16 真机验证：冷启动、周总览、课程编辑入口、课前精确提醒和桌面组件注册均正常。Release APK 位于 `artifacts/CourseTrace-0.2.1-release.apk`。
+`0.2.2`（versionCode 6）已在小米 K100、HyperOS 3、Android 16 真机验证。此版本修复课程详情与记录页叠加、关闭记录页后透明窗口拦截触控的问题；记录页现在完整展开、可滚动、适配输入法，并可继续未结束的记录。Release APK 位于 `artifacts/CourseTrace-0.2.2-release.apk`。

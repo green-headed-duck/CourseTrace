@@ -422,6 +422,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun startSession(ownerId: String, ownerType: String, title: String) {
+        appState.value.sessions.lastOrNull {
+            it.ownerId == ownerId && it.ownerType == ownerType && it.endedAt == null
+        }?.let {
+            _activeSession.value = it
+            _workStatus.value = WorkStatus(message = "已继续未完成的记录")
+            return
+        }
         viewModelScope.launch {
             runCatching { app.repository.startSession(ownerId, ownerType, title) }
                 .onSuccess {
@@ -430,6 +437,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 .onFailure { showError(it) }
         }
+    }
+
+    fun dismissActiveSession() {
+        _activeSession.value = null
     }
 
     fun appendEvent(kind: LearningEventKind, content: String) {

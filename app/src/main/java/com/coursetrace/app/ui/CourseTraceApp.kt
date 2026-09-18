@@ -244,7 +244,7 @@ fun CourseTraceApp(viewModel: MainViewModel) {
             onArchive = viewModel::archiveTerm,
         )
     }
-    selectedCourse?.let { course ->
+    selectedCourse?.takeIf { activeSession == null }?.let { course ->
         OwnerDetailSheet(
             state = appState,
             ownerId = course.id,
@@ -299,7 +299,7 @@ fun CourseTraceApp(viewModel: MainViewModel) {
             },
         )
     }
-    selectedProject?.let { project ->
+    selectedProject?.takeIf { activeSession == null }?.let { project ->
         OwnerDetailSheet(
             state = appState,
             ownerId = project.id,
@@ -317,6 +317,7 @@ fun CourseTraceApp(viewModel: MainViewModel) {
     activeSession?.let {
         ActiveSessionSheet(
             session = it,
+            onDismiss = viewModel::dismissActiveSession,
             onAppend = viewModel::appendEvent,
             onFinish = viewModel::finishSession,
         )

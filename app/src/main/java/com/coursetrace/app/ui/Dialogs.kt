@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -46,6 +47,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -363,7 +365,15 @@ fun OwnerDetailSheet(
                     Button(onClick = onStartSession, modifier = Modifier.weight(1f)) {
                         Icon(Icons.Filled.PlayArrow, null)
                         Spacer(Modifier.width(6.dp))
-                        Text(if (ownerType == "course") "开始课堂记录" else "开始学习")
+                        val continuing = sessions.any { it.endedAt == null }
+                        Text(
+                            when {
+                                continuing && ownerType == "course" -> "继续课堂记录"
+                                continuing -> "继续学习"
+                                ownerType == "course" -> "开始课堂记录"
+                                else -> "开始学习"
+                            },
+                        )
                     }
                     OutlinedButton(onClick = onAddMaterial) { Icon(Icons.Outlined.AttachFile, "添加资料") }
                 }
@@ -460,18 +470,28 @@ fun OwnerDetailSheet(
 @Composable
 fun ActiveSessionSheet(
     session: LearningSession,
+    onDismiss: () -> Unit,
     onAppend: (LearningEventKind, String) -> Unit,
     onFinish: (String, String, Boolean) -> Unit,
 ) {
-    var kind by remember { mutableStateOf(LearningEventKind.NOTE) }
-    var eventText by remember { mutableStateOf("") }
-    var transcript by remember { mutableStateOf("") }
-    var summary by remember { mutableStateOf("") }
-    var complete by remember { mutableStateOf(false) }
-    var finishing by remember { mutableStateOf(false) }
-    ModalBottomSheet(onDismissRequest = { }) {
+    var kind by remember(session.id) { mutableStateOf(LearningEventKind.NOTE) }
+    var eventText by remember(session.id) { mutableStateOf("") }
+    var transcript by remember(session.id) { mutableStateOf("") }
+    var summary by remember(session.id) { mutableStateOf("") }
+    var complete by remember(session.id) { mutableStateOf(false) }
+    var finishing by remember(session.id) { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+    ) {
         Column(
-            Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 36.dp),
+            Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .imePadding()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 36.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -479,7 +499,9 @@ fun ActiveSessionSheet(
                     Text(session.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                     Text("正在按事件顺序记录", color = MaterialTheme.colorScheme.primary)
                 }
-                Icon(Icons.Filled.Check, null, tint = MaterialTheme.colorScheme.secondary)
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Filled.Close, "关闭记录页")
+                }
             }
             if (!finishing) {
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
