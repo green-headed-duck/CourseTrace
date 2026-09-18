@@ -7,10 +7,12 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.coursetrace.app.data.BackupManager
 import com.coursetrace.app.data.LearningSessionPayloadParser
+import com.coursetrace.app.data.PdfImportService
 import com.coursetrace.app.data.TimetablePayloadParser
 import com.coursetrace.app.data.RelaySyncScheduler
 import com.coursetrace.app.data.RelaySyncService
 import com.coursetrace.app.domain.ScheduleEngine
+import com.coursetrace.app.domain.AcademicTermPolicy
 import com.coursetrace.app.model.ApiProfile
 import com.coursetrace.app.model.AppPreferences
 import com.coursetrace.app.model.AppState
@@ -33,6 +35,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import java.security.MessageDigest
 import java.time.LocalDate
 import java.time.OffsetDateTime
@@ -41,6 +44,8 @@ import java.time.LocalTime
 data class WorkStatus(
     val busy: Boolean = false,
     val message: String? = null,
+    val progress: Float? = null,
+    val detail: String? = null,
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -52,6 +57,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val activeSession = _activeSession.asStateFlow()
     private val _openCourseId = MutableStateFlow<String?>(null)
     val openCourseId = _openCourseId.asStateFlow()
+    private val timetableImportMutex = Mutex()
 
     fun requestOpenCourse(courseId: String) { _openCourseId.value = courseId }
     fun consumeOpenCourse() { _openCourseId.value = null }
@@ -179,18 +185,48 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun importPdf(uri: Uri) {
-        viewModelScope.launch {
-            _workStatus.value = WorkStatus(busy = true, message = "正在渲染并识别 PDF…")
-            val name = DocumentFile.fromSingleUri(app, uri)?.name ?: "课程表.pdf"
-            val key = app.secureSettings.getApiKey().orEmpty()
-            val preferences = appState.value.preferences
-            app.pdfImportService.import(uri, name, preferences.apiProfile, key, preferences.scheduleTimeProfile)
-                .onSuccess { draft ->
-                    app.repository.saveImportDraft(draft)
-                    _workStatus.value = WorkStatus(message = "识别完成，请核对 ${draft.slots.size} 条课程")
-                }
-                .onFailure { showError(it) }
+        if (!timetableImportMutex.tryLock()) {
+            _workStatus.value = _workStatus.value.copy(
+                busy = true,
+                detail = "已忽略重复导入操作，请等待当前任务完成",
+            )
+            return
         }
+        viewModelScope.launch {
+            try {
+                _workStatus.value = WorkStatus(busy = true, message = "正在准备导入…", progress = 0f)
+                val name = DocumentFile.fromSingleUri(app, uri)?.name ?: "课程表.pdf"
+                val key = app.secureSettings.getApiKey().orEmpty()
+                val preferences = appState.value.preferences
+                runCatching {
+                    val draft = app.pdfImportService.import(
+                        uri = uri,
+                        sourceName = name,
+                        profile = preferences.apiProfile,
+                        apiKey = key,
+                        timeProfile = preferences.scheduleTimeProfile,
+                        onProgress = ::showPdfImportProgress,
+                    ).getOrThrow()
+                    app.repository.saveImportDraft(draft)
+                    draft
+                }.onSuccess { draft ->
+                    _workStatus.value = WorkStatus(
+                        message = "识别完成，请核对 ${draft.slots.size} 条课程后再确认导入",
+                    )
+                }.onFailure(::showError)
+            } finally {
+                timetableImportMutex.unlock()
+            }
+        }
+    }
+
+    private fun showPdfImportProgress(progress: PdfImportService.Progress) {
+        _workStatus.value = WorkStatus(
+            busy = true,
+            message = progress.message,
+            progress = progress.fraction,
+            detail = progress.detail,
+        )
     }
 
     fun importChatGptShare(text: String) {
@@ -249,12 +285,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun commitImport(draftId: String) {
+        if (!timetableImportMutex.tryLock()) {
+            _workStatus.value = _workStatus.value.copy(
+                busy = true,
+                detail = "已忽略重复确认操作，请等待当前任务完成",
+            )
+            return
+        }
         viewModelScope.launch {
-            runCatching {
-                app.repository.commitImportDraft(draftId)
-                NotificationScheduler(app).reschedule(appState.value)
-            }.onSuccess { _workStatus.value = WorkStatus(message = "课表已导入，并已安排提醒") }
-                .onFailure { showError(it) }
+            try {
+                _workStatus.value = WorkStatus(busy = true, message = "正在写入当前学期…", progress = null)
+                val beforeSlots = app.repository.state.value.slots.size
+                runCatching {
+                    app.repository.commitImportDraft(draftId)
+                    NotificationScheduler(app).reschedule(app.repository.state.value)
+                    app.repository.state.value.slots.size - beforeSlots
+                }.onSuccess { added ->
+                    _workStatus.value = WorkStatus(
+                        message = if (added > 0) "课表已导入，新增 $added 个时间段并安排提醒" else "课表已核对；重复时间段未再次添加",
+                    )
+                }.onFailure(::showError)
+            } finally {
+                timetableImportMutex.unlock()
+            }
         }
     }
 
@@ -359,6 +412,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 app.repository.addTerm(Term(name = name.trim(), startDate = startDate, weekCount = weekCount))
             }.onSuccess { _workStatus.value = WorkStatus(message = "已创建并切换到新学期") }
                 .onFailure(::showError)
+        }
+    }
+
+    fun calibrateCurrentTermWeek(currentWeek: Int) {
+        viewModelScope.launch {
+            runCatching {
+                val termId = appState.value.activeTermId ?: error("请先选择学期")
+                val term = appState.value.terms.find { it.id == termId } ?: error("当前学期不存在")
+                val startDate = AcademicTermPolicy.startDateForCurrentWeek(LocalDate.now(), currentWeek)
+                app.repository.updateTerm(term.copy(startDate = startDate.toString()))
+                NotificationScheduler(app).reschedule(app.repository.state.value)
+                startDate
+            }.onSuccess { startDate ->
+                _workStatus.value = WorkStatus(message = "已校准：今天是第 $currentWeek 周，学期起始日为 $startDate")
+            }.onFailure(::showError)
         }
     }
 

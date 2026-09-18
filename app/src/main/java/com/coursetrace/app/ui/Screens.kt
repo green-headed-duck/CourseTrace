@@ -516,6 +516,10 @@ private fun ImportDraftCard(draft: ImportDraft, onCommit: (String) -> Unit) {
                         style = MaterialTheme.typography.bodySmall,
                     )
                     draft.termName?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
+                    Text(
+                        "确认后写入当前选中的学期，不会按模型结果自动新建或切换学期",
+                        style = MaterialTheme.typography.labelSmall,
+                    )
                 }
                 IconButton(onClick = { expanded = !expanded }) { Icon(Icons.AutoMirrored.Outlined.ArrowForward, null) }
             }
@@ -534,6 +538,12 @@ private fun ImportDraftCard(draft: ImportDraft, onCommit: (String) -> Unit) {
                     Text("无固定时间 · ${course.courseName} · 第 ${course.weeks.joinToString(",")} 周")
                 }
                 draft.warnings.forEach { Text("注意：$it", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                if (draft.termStartDate != null) {
+                    Text(
+                        "识别建议的开学日：${draft.termStartDate}（已有课程时不会覆盖当前学期起点）",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
                 Spacer(Modifier.height(12.dp))
                 Button(onClick = { onCommit(draft.id) }, modifier = Modifier.fillMaxWidth()) { Text("确认并导入") }
             }

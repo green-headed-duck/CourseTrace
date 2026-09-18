@@ -10,7 +10,7 @@
 
 Android 会在覆盖安装时核对签名证书；使用其他证书重新签名的修改版无法覆盖已安装的官方版本。每个 Release 还会公布 APK 的 SHA-256。
 
-`0.2.6` 内置赞赏码源文件 `app/src/main/assets/support_wechat.png` 的 SHA-256 为：
+`0.2.6` 及后续版本内置赞赏码源文件 `app/src/main/assets/support_wechat.png` 的 SHA-256 为：
 
 ```text
 686CBF6683CF6BE66C0F6D4DF3206E69BF57FD74EF0D7929B002EFA01C74C90B

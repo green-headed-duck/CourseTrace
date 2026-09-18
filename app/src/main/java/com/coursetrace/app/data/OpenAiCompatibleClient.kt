@@ -15,6 +15,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -34,6 +35,7 @@ class OpenAiCompatibleClient {
         apiKey: String,
         pageDataUrls: List<String>,
         timeProfile: ScheduleTimeProfile,
+        onResponseProgress: (receivedBytes: Long, totalBytes: Long?) -> Unit = { _, _ -> },
     ): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
             val periodTable = timeProfile.periods.joinToString("；") {
@@ -67,7 +69,7 @@ class OpenAiCompatibleClient {
                     })
                 }
             }
-            request(profile, apiKey, content, maxTokens = 8_000)
+            request(profile, apiKey, content, maxTokens = 8_000, onResponseProgress = onResponseProgress)
         }
     }
 
@@ -76,6 +78,7 @@ class OpenAiCompatibleClient {
         apiKey: String,
         content: JsonArray,
         maxTokens: Int,
+        onResponseProgress: ((receivedBytes: Long, totalBytes: Long?) -> Unit)? = null,
     ): String {
         require(apiKey.isNotBlank()) { "请先填写 API Key" }
         val endpoint = if (profile.useBackendProxy) {
@@ -110,8 +113,22 @@ class OpenAiCompatibleClient {
         try {
             connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
             val code = connection.responseCode
+            val expectedBytes = connection.contentLengthLong.takeIf { it > 0 }
             val response = (if (code in 200..299) connection.inputStream else connection.errorStream)
-                ?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
+                ?.use { input ->
+                    ByteArrayOutputStream().use { output ->
+                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                        var received = 0L
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            output.write(buffer, 0, count)
+                            received += count
+                            onResponseProgress?.invoke(received, expectedBytes)
+                        }
+                        output.toString(Charsets.UTF_8.name())
+                    }
+                }.orEmpty()
             if (code !in 200..299) error("接口返回 HTTP $code：${safeError(response)}")
             val root = json.parseToJsonElement(response).jsonObject
             return root["choices"]?.jsonArray?.firstOrNull()?.jsonObject

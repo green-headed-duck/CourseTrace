@@ -12,9 +12,12 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.CalendarMonth
@@ -22,6 +25,8 @@ import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Card
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -39,6 +44,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -106,8 +112,8 @@ fun CourseTraceApp(viewModel: MainViewModel) {
         pendingBackupPassword = null
     }
 
-    LaunchedEffect(workStatus.message) {
-        workStatus.message?.let {
+    LaunchedEffect(workStatus.message, workStatus.busy) {
+        workStatus.message?.takeIf { !workStatus.busy }?.let {
             snackbarHost.showSnackbar(it)
             viewModel.clearMessage()
         }
@@ -214,6 +220,34 @@ fun CourseTraceApp(viewModel: MainViewModel) {
                 }
             }
         }
+        AnimatedVisibility(
+            visible = workStatus.busy,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(16.dp),
+        ) {
+            Card(Modifier.widthIn(max = 520.dp)) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                ) {
+                    Text(workStatus.message ?: "正在处理…", style = MaterialTheme.typography.titleSmall)
+                    workStatus.detail?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    val progress = workStatus.progress
+                    if (progress != null) {
+                        LinearProgressIndicator(
+                            progress = { progress.coerceIn(0f, 1f) },
+                            modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                        )
+                    } else {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 10.dp))
+                    }
+                }
+            }
+        }
     }
 
     AnimatedVisibility(showAddCourse) {
@@ -242,6 +276,7 @@ fun CourseTraceApp(viewModel: MainViewModel) {
             onSelect = viewModel::selectTerm,
             onAdd = viewModel::addTerm,
             onArchive = viewModel::archiveTerm,
+            onCalibrateCurrentWeek = viewModel::calibrateCurrentTermWeek,
         )
     }
     selectedCourse?.takeIf { activeSession == null }?.let { course ->

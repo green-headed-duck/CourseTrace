@@ -234,6 +234,7 @@ data class ImportDraft(
     val termName: String? = null,
     val termStartDate: String? = null,
     val termWeekCount: Int? = null,
+    val sourceFingerprint: String = "",
 )
 
 @Serializable
@@ -249,6 +250,7 @@ data class AppState(
     val projects: List<StudyProject> = emptyList(),
     val predictions: List<NextMaterialPrediction> = emptyList(),
     val importDrafts: List<ImportDraft> = emptyList(),
+    val appliedImportFingerprints: List<String> = emptyList(),
     val appliedRelayChangeIds: List<String> = emptyList(),
     val preferences: AppPreferences = AppPreferences(),
     val activeTermId: String? = null,

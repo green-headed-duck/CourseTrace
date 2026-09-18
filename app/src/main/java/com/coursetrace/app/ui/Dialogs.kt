@@ -71,6 +71,7 @@ import com.coursetrace.app.model.LearningSession
 import com.coursetrace.app.model.Term
 import com.coursetrace.app.model.WeekPattern
 import java.time.OffsetDateTime
+import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -304,15 +305,25 @@ fun ManageTermsDialog(
     onSelect: (String) -> Unit,
     onAdd: (String, String, Int) -> Unit,
     onArchive: (String) -> Unit,
+    onCalibrateCurrentWeek: (Int) -> Unit,
 ) {
+    val activeTerm = terms.find { it.id == activeTermId }
     var name by remember { mutableStateOf("") }
     var startDate by remember { mutableStateOf(java.time.LocalDate.now().toString()) }
     var weeks by remember { mutableStateOf("20") }
+    var currentWeek by remember(activeTermId, activeTerm?.startDate) {
+        mutableStateOf(
+            activeTerm?.let { ScheduleEngine.weekNumber(it, LocalDate.now()).coerceAtLeast(1).toString() } ?: "1",
+        )
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("学期管理") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     terms.filterNot { it.archived }.forEach { term ->
                         FilterChip(
@@ -320,6 +331,27 @@ fun ManageTermsDialog(
                             onClick = { onSelect(term.id) },
                             label = { Text(term.name) },
                         )
+                    }
+                }
+                if (activeTerm != null) {
+                    Text("当前学期校准", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "起始日 ${activeTerm.startDate} · 今天第 ${ScheduleEngine.weekNumber(activeTerm, LocalDate.now())} 周",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(
+                            value = currentWeek,
+                            onValueChange = { currentWeek = it.filter(Char::isDigit) },
+                            label = { Text("今天是第几周") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true,
+                        )
+                        Button(
+                            onClick = { currentWeek.toIntOrNull()?.let(onCalibrateCurrentWeek) },
+                            enabled = currentWeek.toIntOrNull()?.let { it in 1..40 } == true,
+                        ) { Text("校准") }
                     }
                 }
                 HorizontalDivider()

@@ -71,8 +71,8 @@ ChatGPT 无法被动读取其他历史会话。只有 Skill 活跃时追加或�
 ```powershell
 .\tools\sign-update-manifest.ps1 `
   -ApkPath .\app\build\outputs\apk\release\app-release.apk `
-  -VersionCode 10 -VersionName 0.2.6 `
-  -ApkUrl https://你的域名/downloads/coursetrace-0.2.6.apk
+  -VersionCode 11 -VersionName 0.2.7 `
+  -ApkUrl https://你的域名/downloads/coursetrace-0.2.7.apk
 ```
 
 把 APK 与生成的 `update-manifest.json` 放到 HTTPS 站点，在应用“更新设置”中填写清单地址。后续版本必须沿用同一 Android keystore 和更新清单私钥。
@@ -83,4 +83,4 @@ ChatGPT 无法被动读取其他历史会话。只有 Skill 活跃时追加或�
 
 ## 当前验证版本
 
-`0.2.6`（versionCode 10）已完成单元测试、Android Lint、Release 构建和小米 K100 覆盖安装。课程实时状态严格跟随设置中的提前时间：课前由系统 Chronometer 实时倒计时，到正式开始才切换为“上课中”，下课时自动结束。超级岛采用紧凑标准样式，使用短课程名为其他状态栏图标留出空间；展开通知优先显示教室与准确起止时间。此版本增加自愿支持入口、可打开的历史记录详情、明确的记录操作引导，以及独立的 ChatGPT 课堂 JSON 导入流程。
+`0.2.7`（versionCode 11）修复中转站课表导入链路：界面按 PDF 页数和已返回字节量展示持续进度；同一时刻只允许一个导入/写入任务；PDF 使用 SHA-256 指纹避免重复导入；模型识别出的学期日期只作核对提示，不能再自动新建或切换学期。2026-2027 学年第 1 学期起点校准为 `2026-08-31`，因此 `2026-09-18` 为第 3 教学周；设置中的学期管理也可以随时按“今天是第几周”重新校准。

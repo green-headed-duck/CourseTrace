@@ -13,6 +13,7 @@ import com.coursetrace.app.model.MaterialItem
 import com.coursetrace.app.model.NextMaterialPrediction
 import com.coursetrace.app.model.StudyProject
 import com.coursetrace.app.model.Term
+import com.coursetrace.app.domain.AcademicTermPolicy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -33,7 +34,6 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.Json
 import java.io.File
-import java.time.LocalDate
 import java.time.OffsetDateTime
 import com.coursetrace.app.widget.NextClassWidgetProvider
 
@@ -49,6 +49,7 @@ class AppRepository(context: Context) {
         ignoreUnknownKeys = true
         encodeDefaults = true
     }
+    private var repairedTermOnLoad = false
     val gitHistory by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { GitHistoryService(recordsDir) }
 
     private val _state = MutableStateFlow(load())
@@ -56,26 +57,41 @@ class AppRepository(context: Context) {
 
     init {
         scope.launch {
-            runCatching {
-                if (!stateFile.exists()) persist(_state.value, "初始化课迹本地仓库")
+            mutex.withLock {
+                runCatching {
+                    when {
+                        !stateFile.exists() -> persist(_state.value, "初始化课迹本地仓库")
+                        repairedTermOnLoad -> {
+                            persist(_state.value, "修复学期教学周起点")
+                            repairedTermOnLoad = false
+                        }
+                    }
+                }
             }
         }
     }
 
     private fun defaultState(): AppState {
-        val now = LocalDate.now()
-        val monday = now.minusDays((now.dayOfWeek.value - 1).toLong())
-        val term = Term(name = "当前学期", startDate = monday.toString())
+        val term = AcademicTermPolicy.defaultTerm()
         return AppState(terms = listOf(term), activeTermId = term.id)
     }
 
     private fun load(): AppState = runCatching {
-        if (stateFile.exists()) json.decodeFromString<AppState>(stateFile.readText()) else defaultState()
+        if (!stateFile.exists()) return@runCatching defaultState()
+        val decoded = json.decodeFromString<AppState>(stateFile.readText())
+        AcademicTermPolicy.repairKnown2026Term(decoded).also { repaired ->
+            repairedTermOnLoad = repaired != decoded
+        }
     }.getOrElse { defaultState() }
 
     suspend fun reloadAfterRestore() = mutex.withLock {
-        _state.value = load()
-        gitHistory.commit("从加密备份恢复")
+        val restored = load()
+        _state.value = restored
+        persist(
+            restored,
+            if (repairedTermOnLoad) "从加密备份恢复并修复学期教学周起点" else "从加密备份恢复",
+        )
+        repairedTermOnLoad = false
     }
 
     suspend fun update(message: String, transform: (AppState) -> AppState) = mutex.withLock {
@@ -103,6 +119,11 @@ class AppRepository(context: Context) {
                 activeTermId = if (makeActive) term.id else it.activeTermId,
             )
         }
+
+    suspend fun updateTerm(term: Term) = update("校准学期教学周：${term.name}") { state ->
+        require(state.terms.any { it.id == term.id }) { "学期不存在" }
+        state.copy(terms = state.terms.map { if (it.id == term.id) term else it })
+    }
 
     suspend fun setActiveTerm(termId: String) = update("切换当前学期") { state ->
         require(state.terms.any { it.id == termId }) { "学期不存在" }
@@ -232,38 +253,46 @@ class AppRepository(context: Context) {
         }
 
     suspend fun saveImportDraft(draft: ImportDraft) =
-        update("创建课表导入草稿：${draft.sourceName}") { it.copy(importDrafts = it.importDrafts + draft) }
+        update("创建课表导入草稿：${draft.sourceName}") { state ->
+            if (draft.sourceFingerprint.isNotBlank()) {
+                require(draft.sourceFingerprint !in state.appliedImportFingerprints) {
+                    "这个 PDF 已经成功导入过，无需重复导入"
+                }
+                if (state.importDrafts.any { it.sourceFingerprint == draft.sourceFingerprint }) {
+                    return@update state
+                }
+            }
+            state.copy(importDrafts = state.importDrafts + draft)
+        }
 
     suspend fun clearImportDrafts() =
         update("清理已处理的课表导入草稿") { it.copy(importDrafts = emptyList()) }
 
     suspend fun commitImportDraft(draftId: String) = update("确认导入课表") { state ->
-        val draft = state.importDrafts.find { it.id == draftId } ?: return@update state
-        val terms = state.terms.toMutableList()
-        val currentTermId = state.activeTermId ?: state.terms.first().id
-        val currentTerm = terms.first { it.id == currentTermId }
-        val hasCurrentCourses = state.courses.any { it.termId == currentTermId }
-        val matchingTerm = draft.termStartDate?.let { start -> terms.find { it.startDate == start } }
-        val importedTerm = when {
-            matchingTerm != null -> matchingTerm.copy(
-                name = draft.termName ?: matchingTerm.name,
-                weekCount = draft.termWeekCount ?: matchingTerm.weekCount,
-            )
-            draft.termStartDate != null && hasCurrentCourses -> Term(
-                name = draft.termName ?: "导入学期",
-                startDate = draft.termStartDate,
-                weekCount = draft.termWeekCount ?: 20,
-            ).also(terms::add)
-            draft.termStartDate != null -> currentTerm.copy(
-                name = draft.termName ?: currentTerm.name,
-                startDate = draft.termStartDate,
-                weekCount = draft.termWeekCount ?: currentTerm.weekCount,
-            )
-            else -> currentTerm
+        val draft = state.importDrafts.find { it.id == draftId }
+            ?: error("该导入草稿已被处理，请勿重复点击")
+        require(draft.sourceFingerprint.isBlank() || draft.sourceFingerprint !in state.appliedImportFingerprints) {
+            "这个 PDF 已经成功导入过，无需重复导入"
         }
-        val existingTermIndex = terms.indexOfFirst { it.id == importedTerm.id }
-        if (existingTermIndex >= 0) terms[existingTermIndex] = importedTerm
-        val termId = importedTerm.id
+        val currentTermId = state.activeTermId ?: state.terms.firstOrNull { !it.archived }?.id
+            ?: error("请先创建学期")
+        val currentTerm = state.terms.first { it.id == currentTermId }
+        val hasCurrentCourses = state.courses.any { it.termId == currentTermId }
+        // Model-provided dates are suggestions only. An import never creates or silently
+        // switches terms or rewrites the teaching-week anchor chosen by the user.
+        val importedTerm = currentTerm.copy(
+            name = if (!hasCurrentCourses) {
+                draft.termName?.takeIf { it.isNotBlank() } ?: currentTerm.name
+            } else {
+                currentTerm.name
+            },
+            startDate = currentTerm.startDate,
+            weekCount = maxOf(currentTerm.weekCount, draft.termWeekCount ?: currentTerm.weekCount),
+        )
+        val terms = state.terms.map { term ->
+            if (term.id == currentTermId) importedTerm else term
+        }
+        val termId = currentTermId
         val courses = state.courses.toMutableList()
         val slots = state.slots.toMutableList()
         draft.slots.forEach { imported ->
@@ -307,10 +336,15 @@ class AppRepository(context: Context) {
         }
         state.copy(
             terms = terms,
-            activeTermId = termId,
+            activeTermId = currentTermId,
             courses = courses,
             slots = slots,
             importDrafts = state.importDrafts.filterNot { it.id == draftId },
+            appliedImportFingerprints = if (draft.sourceFingerprint.isBlank()) {
+                state.appliedImportFingerprints
+            } else {
+                (state.appliedImportFingerprints + draft.sourceFingerprint).distinct().takeLast(100)
+            },
         )
     }
 
