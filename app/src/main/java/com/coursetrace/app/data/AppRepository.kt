@@ -171,6 +171,45 @@ class AppRepository(context: Context) {
         }
     }
 
+    suspend fun importLearningSessionPayload(
+        sessionId: String,
+        payload: LearningSessionImportPayload,
+        finish: Boolean,
+    ) {
+        update(if (finish) "导入并结束 ChatGPT 课堂记录" else "导入 ChatGPT 课堂记录") { state ->
+            require(state.sessions.any { it.id == sessionId }) { "当前记录不存在" }
+            val now = OffsetDateTime.now().toString()
+            val firstSequence = state.events.count { it.sessionId == sessionId } + 1
+            val importedEvents = payload.events.mapIndexed { index, imported ->
+                LearningEvent(
+                    sessionId = sessionId,
+                    timestamp = imported.occurredAt?.takeIf(String::isNotBlank) ?: now,
+                    kind = imported.kind,
+                    content = imported.content.trim(),
+                    sequence = firstSequence + index,
+                    source = "chatgpt_mobile",
+                )
+            }
+            state.copy(
+                events = state.events + importedEvents,
+                sessions = state.sessions.map { session ->
+                    if (session.id != sessionId) session else session.copy(
+                        endedAt = if (finish) now else session.endedAt,
+                        summary = payload.summary.ifBlank { session.summary },
+                        rawTranscript = mergeImportedText(session.rawTranscript, payload.rawTranscript),
+                        transcriptComplete = payload.transcriptComplete,
+                    )
+                },
+            )
+        }
+    }
+
+    private fun mergeImportedText(existing: String, imported: String): String = when {
+        imported.isBlank() -> existing
+        existing.isBlank() || existing.trim() == imported.trim() -> imported.trim()
+        else -> "${existing.trim()}\n\n${imported.trim()}"
+    }
+
     suspend fun finishSession(
         sessionId: String,
         summary: String,

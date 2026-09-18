@@ -6,6 +6,7 @@ import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.coursetrace.app.data.BackupManager
+import com.coursetrace.app.data.LearningSessionPayloadParser
 import com.coursetrace.app.data.TimetablePayloadParser
 import com.coursetrace.app.data.RelaySyncScheduler
 import com.coursetrace.app.data.RelaySyncService
@@ -464,6 +465,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _workStatus.value = WorkStatus(message = "本节记录已写入本地 Git 历史")
                 }
                 .onFailure { showError(it) }
+        }
+    }
+
+    fun importLearningSessionJson(text: String, finish: Boolean) {
+        val session = _activeSession.value ?: return
+        viewModelScope.launch {
+            runCatching {
+                val payload = LearningSessionPayloadParser.parse(text)
+                app.repository.importLearningSessionPayload(session.id, payload, finish)
+                payload
+            }.onSuccess { payload ->
+                if (finish) {
+                    _activeSession.value = null
+                } else {
+                    // Repository state is updated synchronously before persistence finishes.
+                    // Reading it directly avoids briefly restoring the pre-import draft from
+                    // the asynchronously collected UI state.
+                    _activeSession.value = app.repository.state.value.sessions.find { it.id == session.id }
+                }
+                _workStatus.value = WorkStatus(
+                    message = if (finish) {
+                        "已导入 ${payload.events.size} 条事件，并保存本节记录"
+                    } else {
+                        "已导入 ${payload.events.size} 条事件，可继续记录"
+                    },
+                )
+            }.onFailure(::showError)
         }
     }
 

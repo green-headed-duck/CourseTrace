@@ -320,6 +320,7 @@ fun CourseTraceApp(viewModel: MainViewModel) {
             onDismiss = viewModel::dismissActiveSession,
             onAppend = viewModel::appendEvent,
             onFinish = viewModel::finishSession,
+            onImportJson = viewModel::importLearningSessionJson,
         )
     }
     if (showBackupDialog) {

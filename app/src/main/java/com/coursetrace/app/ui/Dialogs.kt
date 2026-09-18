@@ -5,6 +5,7 @@ package com.coursetrace.app.ui
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -33,6 +34,7 @@ import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Archive
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -63,10 +65,14 @@ import com.coursetrace.app.domain.ScheduleEngine
 import com.coursetrace.app.model.AppState
 import com.coursetrace.app.model.Course
 import com.coursetrace.app.model.CourseSlot
+import com.coursetrace.app.model.LearningEvent
 import com.coursetrace.app.model.LearningEventKind
 import com.coursetrace.app.model.LearningSession
 import com.coursetrace.app.model.Term
 import com.coursetrace.app.model.WeekPattern
+import java.time.OffsetDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 @Composable
 fun AddCourseDialog(
@@ -356,12 +362,21 @@ fun OwnerDetailSheet(
     val materials = state.materials.filter { it.ownerId == ownerId }
     val sessions = state.sessions.filter { it.ownerId == ownerId }.sortedByDescending { it.startedAt }
     val prediction = state.predictions.find { it.ownerId == ownerId }
+    var selectedSessionId by remember(ownerId) { mutableStateOf<String?>(null) }
+    val selectedSession = sessions.find { it.id == selectedSessionId }
     ModalBottomSheet(onDismissRequest = onDismiss) {
-        LazyColumn(
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp, 0.dp, 20.dp, 40.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
+        if (selectedSession != null) {
+            LearningRecordDetail(
+                session = selectedSession,
+                events = state.events.filter { it.sessionId == selectedSession.id }.sortedBy { it.sequence },
+                onBack = { selectedSessionId = null },
+                onDismiss = onDismiss,
+            )
+        } else LazyColumn(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp, 0.dp, 20.dp, 40.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
@@ -451,7 +466,16 @@ fun OwnerDetailSheet(
             else items(sessions.take(8), key = { it.id }) { session ->
                 ListItem(
                     headlineContent = { Text(session.title) },
-                    supportingContent = { Text(session.summary.ifBlank { if (session.endedAt == null) "进行中" else "未填写摘要" }) },
+                    supportingContent = {
+                        Column {
+                            Text(session.summary.ifBlank { if (session.endedAt == null) "进行中" else "未填写摘要" })
+                            Text(formatRecordTime(session.startedAt), style = MaterialTheme.typography.labelSmall)
+                        }
+                    },
+                    trailingContent = { Icon(Icons.Outlined.ChevronRight, "查看记录") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { selectedSessionId = session.id },
                 )
             }
             item {
@@ -460,6 +484,7 @@ fun OwnerDetailSheet(
                         val prompt = buildString {
                             append("我正在学习《$title》。请使用课迹 CourseTrace 工具识别当前课程/项目，读取最近进度并开始记录。")
                             if (prediction != null) append(" 当前预测：${prediction.title}（置信度 ${(prediction.confidence * 100).toInt()}%）。")
+                            append(" 当我说下课时，请仅输出可导入课迹的 JSON，字段为 summary、events[{kind,content,occurredAt}]、rawTranscript、transcriptComplete；kind 使用 QUESTION、PAIN_POINT、WRONG_ANSWER、PROGRESS、DECISION、NOTE 或 TRANSCRIPT。")
                         }
                         context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
                             type = "text/plain"
@@ -473,9 +498,91 @@ fun OwnerDetailSheet(
                     Text("在 ChatGPT 中继续")
                 }
             }
+            }
+    }
+}
+
+@Composable
+private fun LearningRecordDetail(
+    session: LearningSession,
+    events: List<LearningEvent>,
+    onBack: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    LazyColumn(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(20.dp, 0.dp, 20.dp, 40.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = onBack) { Text("‹ 返回课程") }
+                Spacer(Modifier.weight(1f))
+                IconButton(onClick = onDismiss) { Icon(Icons.Filled.Close, "关闭") }
+            }
+            Text(session.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text(
+                buildString {
+                    append(formatRecordTime(session.startedAt))
+                    session.endedAt?.let { append(" – ${formatRecordTime(it)}") } ?: append(" · 仍在进行")
+                },
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        item {
+            SoftCard {
+                Text("本节摘要", fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(6.dp))
+                Text(session.summary.ifBlank { "这条记录还没有摘要。" })
+            }
+        }
+        item {
+            Text("事件时间线 · ${events.size} 条", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        }
+        if (events.isEmpty()) {
+            item { Text("没有单独记录的事件。", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        } else items(events, key = { it.id }) { event ->
+            SoftCard {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(learningEventLabel(event.kind), fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.weight(1f))
+                    Text(formatRecordTime(event.timestamp), style = MaterialTheme.typography.labelSmall)
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(event.content)
+                if (event.source != "local") {
+                    Text("来源：ChatGPT 导入", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+        item {
+            Text("课堂原文", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(
+                if (session.transcriptComplete) "已标记为完整" else "未标记为完整",
+                style = MaterialTheme.typography.labelMedium,
+                color = if (session.transcriptComplete) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(8.dp))
+            SoftCard {
+                Text(session.rawTranscript.ifBlank { "没有保存课堂原文。" })
+            }
         }
     }
 }
+
+private fun learningEventLabel(kind: LearningEventKind): String = when (kind) {
+    LearningEventKind.TRANSCRIPT -> "原文"
+    LearningEventKind.QUESTION -> "问题"
+    LearningEventKind.PAIN_POINT -> "痛点"
+    LearningEventKind.WRONG_ANSWER -> "错题"
+    LearningEventKind.PROGRESS -> "进度"
+    LearningEventKind.DECISION -> "结论"
+    LearningEventKind.NOTE -> "笔记"
+}
+
+private fun formatRecordTime(value: String): String = runCatching {
+    OffsetDateTime.parse(value).format(DateTimeFormatter.ofPattern("M月d日 HH:mm", Locale.CHINA))
+}.getOrElse { value.take(16).replace('T', ' ') }
 
 @Composable
 fun ActiveSessionSheet(
@@ -483,13 +590,15 @@ fun ActiveSessionSheet(
     onDismiss: () -> Unit,
     onAppend: (LearningEventKind, String) -> Unit,
     onFinish: (String, String, Boolean) -> Unit,
+    onImportJson: (String, Boolean) -> Unit,
 ) {
     var kind by remember(session.id) { mutableStateOf(LearningEventKind.NOTE) }
     var eventText by remember(session.id) { mutableStateOf("") }
-    var transcript by remember(session.id) { mutableStateOf("") }
-    var summary by remember(session.id) { mutableStateOf("") }
-    var complete by remember(session.id) { mutableStateOf(false) }
+    var transcript by remember(session.id, session.rawTranscript) { mutableStateOf(session.rawTranscript) }
+    var summary by remember(session.id, session.summary) { mutableStateOf(session.summary) }
+    var complete by remember(session.id, session.transcriptComplete) { mutableStateOf(session.transcriptComplete) }
     var finishing by remember(session.id) { mutableStateOf(false) }
+    var showJsonImport by remember(session.id) { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -513,6 +622,19 @@ fun ActiveSessionSheet(
                     Icon(Icons.Filled.Close, "关闭记录页")
                 }
             }
+            SoftCard {
+                Text("记录方式", fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(6.dp))
+                Text("• 自己随手记：在下方选类型并追加到时间线。")
+                Text("• ChatGPT 返回 JSON：使用专用导入入口，不要粘到过程或摘要框。")
+                Text("• 普通聊天全文：只粘到“结束并整理”里的课堂原文框。")
+                Spacer(Modifier.height(10.dp))
+                OutlinedButton(onClick = { showJsonImport = true }, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.AutoMirrored.Outlined.Chat, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("粘贴 ChatGPT JSON")
+                }
+            }
             if (!finishing) {
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf(
@@ -529,7 +651,8 @@ fun ActiveSessionSheet(
                     value = eventText,
                     onValueChange = { eventText = it },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("记录刚刚发生的内容") },
+                    label = { Text("手动记录刚刚发生的内容") },
+                    supportingText = { Text("这里只写一条笔记、问题、痛点或进度，不粘贴整段 JSON") },
                     minLines = 3,
                 )
                 Button(
@@ -539,12 +662,20 @@ fun ActiveSessionSheet(
                 ) { Text("追加到时间线") }
                 TextButton(onClick = { finishing = true }, modifier = Modifier.align(Alignment.End)) { Text("结束并整理") }
             } else {
-                OutlinedTextField(summary, { summary = it }, modifier = Modifier.fillMaxWidth(), label = { Text("本节摘要") }, minLines = 2)
+                OutlinedTextField(
+                    summary,
+                    { summary = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("本节摘要") },
+                    supportingText = { Text("填写便于回顾的人类可读总结，不粘贴 JSON") },
+                    minLines = 2,
+                )
                 OutlinedTextField(
                     transcript,
                     { transcript = it },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("课堂原文（可从 ChatGPT 一键分享或粘贴）") },
+                    label = { Text("完整聊天原文") },
+                    supportingText = { Text("这里粘贴普通聊天全文；结构化 JSON 请使用上方专用入口") },
                     minLines = 5,
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -563,4 +694,49 @@ fun ActiveSessionSheet(
             }
         }
     }
+    if (showJsonImport) {
+        LearningJsonImportDialog(
+            onDismiss = { showJsonImport = false },
+            onImport = { text, finish ->
+                onImportJson(text, finish)
+                showJsonImport = false
+            },
+        )
+    }
+}
+
+@Composable
+private fun LearningJsonImportDialog(
+    onDismiss: () -> Unit,
+    onImport: (String, Boolean) -> Unit,
+) {
+    var text by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("导入 ChatGPT 课堂 JSON") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("把 ChatGPT 返回的整个 JSON 对象粘贴到这里。课迹会解析摘要、事件时间线、原文和完整性标记。")
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("课堂记录 JSON") },
+                    placeholder = { Text("{\"summary\":\"…\",\"events\":[…]}") },
+                    minLines = 8,
+                )
+                OutlinedButton(
+                    onClick = { onImport(text, false) },
+                    enabled = text.isNotBlank(),
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("导入并继续记录") }
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onImport(text, true) }, enabled = text.isNotBlank()) {
+                Text("导入并结束本节")
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
 }

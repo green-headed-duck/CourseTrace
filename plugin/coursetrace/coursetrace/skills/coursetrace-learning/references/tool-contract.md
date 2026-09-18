@@ -27,6 +27,29 @@ The Android app accepts a shared timetable draft as one JSON object:
 
 Learning events use the kinds `TRANSCRIPT`, `QUESTION`, `PAIN_POINT`, `WRONG_ANSWER`, `PROGRESS`, `DECISION`, and `NOTE`. Every event has a server sequence number so the phone can merge it idempotently.
 
+When CourseTrace tools are unavailable, return one JSON object that can be pasted into the Android app's dedicated **导入 ChatGPT 课堂 JSON** dialog. Do not wrap it in explanatory prose:
+
+```json
+{
+  "summary": "本节课的人类可读摘要",
+  "events": [
+    {
+      "kind": "QUESTION",
+      "content": "为什么异或不能直接当作普通或？",
+      "occurredAt": "2026-09-18T10:12:00+08:00"
+    },
+    {
+      "kind": "PROGRESS",
+      "content": "完成半加器到全加器的推导"
+    }
+  ],
+  "rawTranscript": "用户与 ChatGPT 的课堂聊天原文",
+  "transcriptComplete": false
+}
+```
+
+`summary` is for later reading, `events` becomes the chronological timeline, and `rawTranscript` contains the ordinary chat transcript. The user should paste this whole object into the dedicated JSON importer—not into the manual event, summary, or raw-transcript fields.
+
 The expected tools are:
 
 - `get_current_class(at?)`

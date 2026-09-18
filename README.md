@@ -2,6 +2,8 @@
 
 课迹是一款个人使用的原生 Android 课程与学习记录应用。最低 Android 10（API 29），目标 Android 16（API 36），重点适配小米 OS 3，同时保持标准 Android 行为。
 
+[下载最新版本](https://github.com/green-headed-duck/CourseTrace/releases/latest) · [反馈问题](https://github.com/green-headed-duck/CourseTrace/issues)
+
 ## 已实现
 
 - Kotlin + Jetpack Compose Material 3；系统深浅色、动态配色、横竖屏和宽屏自适应。
@@ -9,7 +11,7 @@
 - 华南理工大学大学城/国际校区第 1—11 节作息模板；PDF 只有“第几节”时自动换算准确时间。
 - 今日、周总览、课程编辑/移出课表，以及“下一节课”桌面组件。
 - OpenAI 兼容中转接口，默认配置 `https://api.apiyi.com/v1` / `gpt-5.6-luna`；模型名可单独编辑，Key 仅存 Android Keystore。
-- ChatGPT Mobile 系统分享导入，以及为未来/兼容工作区准备的自托管 CourseTrace MCP 中继；ChatGPT Pro 推理与 PDF API 中转互不混用。
+- ChatGPT Mobile 系统分享与课堂 JSON 专用导入；摘要、问题、错题、痛点、进度、结论和原文分别归档，不必猜测粘贴框。另有为未来/兼容工作区准备的自托管 CourseTrace MCP 中继；ChatGPT Pro 推理与 PDF API 中转互不混用。
 - 上课前默认 15 分钟本地提醒、Android 16 临近/上课实时更新样式、点通知直达对应课程；精确提醒无权限时自动降级。
 - 早课系统闹钟开关与显式设置操作；最终行为由系统时钟应用确认。
 - 课程和 FPGA 等自学项目的资料、课堂原文、错题、痛点、进度与下次资料预测。
@@ -37,13 +39,14 @@ $env:JAVA_HOME = '你的 JDK 17 路径'
 2. 在“设置 → PDF 识别接口”填入 API Key。默认中转站和模型已经预填，可先点“测试连接”。Key 不会进入仓库或 APK。
 3. 从系统文件选择器选课程表 PDF，核对置信度、单双周、时间与教室后再确认导入。
 4. 在课程详情中归档课件；文件仍由系统文档提供器管理，课迹只保留持续授权的 URI 和校验值。
-5. 个人 Pro 手机端直接使用“复制课堂指令 → 在 ChatGPT 聊天 → 下课后分享到课迹”。这是当前可工作的路径，不需要 OpenAI API。
+5. 个人 Pro 手机端使用“复制课堂指令 → 在 ChatGPT 聊天 → 下课时复制 JSON → 课程记录页的‘粘贴 ChatGPT JSON’”。JSON 不要粘入手动过程、摘要或普通原文框。也可直接通过系统分享把普通聊天原文送回课迹；这些路径不需要 OpenAI API。
+6. “设置 → 关于与支持 → GitHub”可直达源码、历史版本下载和问题反馈页面。
 
 ## ChatGPT 联动与当前限制
 
 截至 2026-09-17，个人 ChatGPT Pro 可以构建 Apps SDK 应用，但自定义 MCP App 仍不支持 ChatGPT 手机端；Pro 的 MCP 也只开放读取/检索，完整写入能力面向 Business、Enterprise 和 Edu。个人账号当前也不能新建自定义 GPT。因此，手机端“完全无感、自动把每条聊天写进课迹”不能在不绕过系统安全边界的前提下实现。
 
-课迹现在采用可靠的兼容流程：课程详情一键把上下文分享到 ChatGPT；ChatGPT 按课堂指令整理；结束后用系统分享把 JSON 或原文送回课迹。应用明确记录原文完整性，不会谎称拿到了全部聊天。
+课迹现在采用可靠的兼容流程：课程详情一键把上下文分享到 ChatGPT；ChatGPT 按课堂指令整理；结束后把结构化 JSON 粘到专用导入框，或用系统分享把普通原文送回课迹。应用明确记录原文完整性，不会谎称拿到了全部聊天。课程详情中的历史记录可以打开，查看摘要、按事件排序的时间线和课堂原文。
 
 源代码生成了专用插件与 Skill，位于 `plugin/coursetrace/coursetrace/`：
 
@@ -68,8 +71,8 @@ ChatGPT 无法被动读取其他历史会话。只有 Skill 活跃时追加或�
 ```powershell
 .\tools\sign-update-manifest.ps1 `
   -ApkPath .\app\build\outputs\apk\release\app-release.apk `
-  -VersionCode 9 -VersionName 0.2.5 `
-  -ApkUrl https://你的域名/downloads/coursetrace-0.2.5.apk
+  -VersionCode 10 -VersionName 0.2.6 `
+  -ApkUrl https://你的域名/downloads/coursetrace-0.2.6.apk
 ```
 
 把 APK 与生成的 `update-manifest.json` 放到 HTTPS 站点，在应用“更新设置”中填写清单地址。后续版本必须沿用同一 Android keystore 和更新清单私钥。
@@ -80,4 +83,4 @@ ChatGPT 无法被动读取其他历史会话。只有 Skill 活跃时追加或�
 
 ## 当前验证版本
 
-`0.2.5`（versionCode 9）已在小米 K100、HyperOS 3、Android 16 真机验证。课程实时状态严格跟随设置中的提前时间：课前由系统 Chronometer 实时倒计时，不再显示会过期的静态分钟数；到正式开始才切换为“上课中”，下课时自动结束。超级岛采用紧凑标准样式，移除大追踪图和空进度条，使用短课程名为其他状态栏图标留出空间；展开通知优先显示教室与准确起止时间。课程详情可单独设置超级岛简称和提醒时间。此版本同时包含记录页触控卡死修复。Release APK 位于 `artifacts/CourseTrace-0.2.5-release.apk`。
+`0.2.6`（versionCode 10）已完成单元测试、Android Lint、Release 构建和小米 K100 覆盖安装。课程实时状态严格跟随设置中的提前时间：课前由系统 Chronometer 实时倒计时，到正式开始才切换为“上课中”，下课时自动结束。超级岛采用紧凑标准样式，使用短课程名为其他状态栏图标留出空间；展开通知优先显示教室与准确起止时间。此版本增加自愿支持入口、可打开的历史记录详情、明确的记录操作引导，以及独立的 ChatGPT 课堂 JSON 导入流程。

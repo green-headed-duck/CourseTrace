@@ -2,13 +2,19 @@
 
 package com.coursetrace.app.ui
 
+import android.content.ContentValues
 import android.content.Intent
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.provider.Settings
+import android.provider.MediaStore
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -35,7 +41,9 @@ import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material.icons.outlined.Brightness6
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.CloudOff
+import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.NotificationsActive
@@ -65,6 +73,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -96,6 +105,7 @@ fun SettingsScreen(
     var showLinkDialog by remember { mutableStateOf(false) }
     var showUpdateDialog by remember { mutableStateOf(false) }
     var showTimeProfileDialog by remember { mutableStateOf(false) }
+    var showSupportDialog by remember { mutableStateOf(false) }
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp, 22.dp, 20.dp, 120.dp),
@@ -242,7 +252,11 @@ fun SettingsScreen(
                 Spacer(Modifier.height(10.dp))
                 OutlinedButton(
                     onClick = {
-                        val prompt = "请按时间顺序记录本次课堂讨论，区分问题、错题、痛点、进度和待办。下课时保留课堂原文，并明确标记原文是否完整；输出可分享给课迹的结构化 JSON。"
+                        val prompt = """
+                            请按时间顺序记录本次课堂讨论，区分问题、错题、痛点、进度和结论。下课时只输出一个 JSON 对象，不要使用 Markdown：
+                            {"summary":"本节摘要","events":[{"kind":"QUESTION","content":"内容","occurredAt":"ISO-8601时间"}],"rawTranscript":"完整聊天原文","transcriptComplete":true}
+                            kind 只能使用 TRANSCRIPT、QUESTION、PAIN_POINT、WRONG_ANSWER、PROGRESS、DECISION、NOTE。无法确认原文完整时把 transcriptComplete 设为 false。
+                        """.trimIndent()
                         context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("课迹课堂指令", prompt))
                     },
                     modifier = Modifier.fillMaxWidth(),
@@ -320,6 +334,41 @@ fun SettingsScreen(
             }
         }
         item {
+            SettingsSection("关于与支持", Icons.Outlined.FavoriteBorder) {
+                Text("课迹保持免费、无广告", fontWeight = FontWeight.SemiBold)
+                Text(
+                    "如果它帮到了你，可以自愿请作者喝瓶水；0.5 元或 1 元都很感谢，不影响任何功能。",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedButton(
+                    onClick = {
+                        runCatching {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse(COURSETRACE_GITHUB_URL)),
+                            )
+                        }.onFailure {
+                            Toast.makeText(context, "无法打开浏览器", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Outlined.Code, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("GitHub：源码、版本与反馈")
+                }
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = { showSupportDialog = true },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Outlined.FavoriteBorder, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("支持开发")
+                }
+            }
+        }
+        item {
             Text(
                 "课迹只使用公开 Android API。无无障碍自动化、无屏幕监听、无隐藏接口、无广告分析。",
                 style = MaterialTheme.typography.bodySmall,
@@ -370,6 +419,82 @@ fun SettingsScreen(
             profile = state.preferences.scheduleTimeProfile,
             onDismiss = { showTimeProfileDialog = false },
         )
+    }
+    if (showSupportDialog) {
+        SupportDeveloperDialog(
+            onDismiss = { showSupportDialog = false },
+            onSaveImage = { saveSupportCodeToGallery(context) },
+        )
+    }
+}
+
+private const val COURSETRACE_GITHUB_URL = "https://github.com/green-headed-duck/CourseTrace"
+
+@Composable
+private fun SupportDeveloperDialog(
+    onDismiss: () -> Unit,
+    onSaveImage: () -> Unit,
+) {
+    val context = LocalContext.current
+    val supportCode = remember {
+        context.assets.open("support_wechat.png").use { input ->
+            checkNotNull(BitmapFactory.decodeStream(input)).asImageBitmap()
+        }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("感谢支持课迹") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Image(
+                    bitmap = supportCode,
+                    contentDescription = "GreenDuck 的微信赞赏码",
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    "完全自愿，不影响任何功能。付款前请核对收款方昵称 GreenDuck。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    "在本机使用时，可先保存图片，再到微信扫一扫中从相册选择。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedButton(onClick = onSaveImage, modifier = Modifier.fillMaxWidth()) {
+                    Text("保存赞赏码到相册")
+                }
+            }
+        },
+        confirmButton = { Button(onClick = onDismiss) { Text("完成") } },
+    )
+}
+
+private fun saveSupportCodeToGallery(context: android.content.Context) {
+    val resolver = context.contentResolver
+    val values = ContentValues().apply {
+        put(MediaStore.Images.Media.DISPLAY_NAME, "CourseTrace-WeChat-Support.png")
+        put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+        put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/CourseTrace")
+        put(MediaStore.Images.Media.IS_PENDING, 1)
+    }
+    val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+    if (uri == null) {
+        Toast.makeText(context, "无法创建图片文件", Toast.LENGTH_SHORT).show()
+        return
+    }
+    try {
+        context.assets.open("support_wechat.png").use { input ->
+            resolver.openOutputStream(uri)?.use(input::copyTo)
+                ?: error("无法写入图片")
+        }
+        values.clear()
+        values.put(MediaStore.Images.Media.IS_PENDING, 0)
+        resolver.update(uri, values, null, null)
+        Toast.makeText(context, "已保存到相册的 CourseTrace 文件夹", Toast.LENGTH_SHORT).show()
+    } catch (_: Exception) {
+        resolver.delete(uri, null, null)
+        Toast.makeText(context, "保存失败，请稍后重试", Toast.LENGTH_SHORT).show()
     }
 }
 
