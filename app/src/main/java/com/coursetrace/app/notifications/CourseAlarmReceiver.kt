@@ -25,6 +25,7 @@ class CourseAlarmReceiver : BroadcastReceiver() {
                 when (intent.getStringExtra(NotificationScheduler.EXTRA_MODE) ?: NotificationScheduler.MODE_REMINDER) {
                     NotificationScheduler.MODE_END -> context.getSystemService(NotificationManager::class.java)
                         .cancel(NotificationScheduler.LIVE_NOTIFICATION_ID)
+                    NotificationScheduler.MODE_START,
                     NotificationScheduler.MODE_LIVE -> if (scheduled != null) {
                         val scheduler = NotificationScheduler(context)
                         if (Build.VERSION.SDK_INT >= 36) scheduler.showLiveClass(scheduled)

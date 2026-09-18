@@ -302,7 +302,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         startWeek: Int,
         endWeek: Int,
         pattern: WeekPattern,
-        reminderMinutes: Int,
+        reminderMinutes: Int?,
         notes: String,
     ) {
         viewModelScope.launch {
@@ -310,12 +310,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 require(name.isNotBlank()) { "课程名称不能为空" }
                 require(LocalTime.parse(start) < LocalTime.parse(end)) { "结束时间必须晚于开始时间" }
                 require(startWeek in 1..30 && endWeek in startWeek..30) { "周次范围无效" }
-                require(reminderMinutes in 0..180) { "提醒时间应在 0 到 180 分钟之间" }
+                require(reminderMinutes == null || reminderMinutes in 0..180) {
+                    "提醒时间应留空，或填写 0 到 180 分钟"
+                }
                 app.repository.upsertCourse(
                     course.copy(
                         name = name.trim(),
                         teacher = teacher.trim(),
-                        defaultReminderMinutes = reminderMinutes,
+                        reminderOverrideMinutes = reminderMinutes,
                         notes = notes.trim(),
                     ),
                     listOf(slot.copy(

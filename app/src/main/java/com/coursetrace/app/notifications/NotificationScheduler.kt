@@ -23,10 +23,8 @@ import com.coursetrace.app.R
 import com.coursetrace.app.domain.ScheduleEngine
 import com.coursetrace.app.domain.ScheduledClass
 import com.coursetrace.app.model.AppState
-import java.time.Duration
 import java.time.LocalDateTime
 import java.time.ZoneId
-import kotlin.math.roundToInt
 
 class NotificationScheduler(private val context: Context) {
     private val alarmManager = context.getSystemService(AlarmManager::class.java)
@@ -43,7 +41,7 @@ class NotificationScheduler(private val context: Context) {
                 ).apply { description = "在课程开始前提醒" },
                 NotificationChannel(
                     LIVE_CHANNEL,
-                    "正在上课",
+                    "课程实时状态",
                     NotificationManager.IMPORTANCE_DEFAULT,
                 ).apply {
                     description = "在系统状态区显示即将开始或正在进行的课程"
@@ -55,27 +53,47 @@ class NotificationScheduler(private val context: Context) {
 
     fun reschedule(state: AppState) {
         cancelTrackedAlarms()
+        context.getSystemService(NotificationManager::class.java).cancel(LIVE_NOTIFICATION_ID)
         val requestCodes = mutableSetOf<String>()
+        val now = LocalDateTime.now()
         ScheduleEngine.upcoming(state, days = 60).forEach { scheduled ->
-            val lead = scheduled.course.defaultReminderMinutes.takeIf { it > 0 }
-                ?: state.preferences.notificationLeadMinutes
+            val lead = ClassNotificationPresenter.reminderLeadMinutes(scheduled.course, state.preferences)
+            if (lead <= 0) return@forEach
             val trigger = scheduled.start.minusMinutes(lead.toLong())
-            if (trigger > LocalDateTime.now()) {
-                schedule(trigger, scheduled).forEach { requestCodes += it.toString() }
+            schedule(trigger, scheduled, now).forEach { requestCodes += it.toString() }
+            if (trigger <= now && now < scheduled.end) {
+                if (now < scheduled.start || Build.VERSION.SDK_INT < 36) {
+                    showReminder(scheduled, now)
+                } else {
+                    showLiveClass(scheduled, now)
+                }
             }
         }
         schedulePreferences.edit().putStringSet("request_codes", requestCodes).apply()
     }
 
-    private fun schedule(trigger: LocalDateTime, scheduled: ScheduledClass): Set<Int> {
+    private fun schedule(
+        trigger: LocalDateTime,
+        scheduled: ScheduledClass,
+        now: LocalDateTime,
+    ): Set<Int> {
+        val codes = mutableSetOf<Int>()
         val code = requestCode(scheduled)
-        scheduleAlarm(trigger, scheduled, code, MODE_REMINDER)
-        val liveCode = code xor LIVE_CODE_MASK
-        val liveAt = scheduled.start.minusMinutes(15)
-        if (liveAt > LocalDateTime.now() && liveAt != trigger) scheduleAlarm(liveAt, scheduled, liveCode, MODE_LIVE)
+        if (trigger > now) {
+            scheduleAlarm(trigger, scheduled, code, MODE_REMINDER)
+            codes += code
+        }
+        val startCode = code xor START_CODE_MASK
+        if (scheduled.start > now) {
+            scheduleAlarm(scheduled.start, scheduled, startCode, MODE_START)
+            codes += startCode
+        }
         val endCode = code xor END_CODE_MASK
-        scheduleAlarm(scheduled.end.plusMinutes(1), scheduled, endCode, MODE_END)
-        return setOf(code, liveCode, endCode)
+        if (scheduled.end > now) {
+            scheduleAlarm(scheduled.end, scheduled, endCode, MODE_END)
+            codes += endCode
+        }
+        return codes
     }
 
     private fun scheduleAlarm(at: LocalDateTime, scheduled: ScheduledClass, code: Int, mode: String) {
@@ -111,17 +129,17 @@ class NotificationScheduler(private val context: Context) {
         }
     }
 
-    fun showReminder(scheduled: ScheduledClass) {
+    fun showReminder(scheduled: ScheduledClass, now: LocalDateTime = LocalDateTime.now()) {
         if (!canNotify()) return
+        val presentation = ClassNotificationPresenter.present(scheduled, now)
         val notification = NotificationCompat.Builder(context, REMINDER_CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("${scheduled.course.name} · 即将上课")
-            .setContentText("${scheduled.start.toLocalTime()}  ${scheduled.room.ifBlank { "教室待确认" }}")
+            .setContentTitle(presentation.title)
+            .setContentText(presentation.text)
             .setStyle(
                 NotificationCompat.BigTextStyle().bigText(
                     buildString {
-                        append("${scheduled.start.toLocalTime()}–${scheduled.end.toLocalTime()}")
-                        append("  ${scheduled.room.ifBlank { "教室待确认" }}")
+                        append(presentation.text)
                         if (scheduled.course.teacher.isNotBlank()) append("\n${scheduled.course.teacher}")
                         if (scheduled.note.isNotBlank()) append("\n${scheduled.note}")
                     },
@@ -129,6 +147,7 @@ class NotificationScheduler(private val context: Context) {
             )
             .setContentIntent(contentIntent(scheduled))
             .setAutoCancel(true)
+            .setOnlyAlertOnce(true)
             .setCategory(NotificationCompat.CATEGORY_EVENT)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .build()
@@ -138,8 +157,7 @@ class NotificationScheduler(private val context: Context) {
             // The permission can be revoked between the check and this call.
         }
 
-        val now = LocalDateTime.now()
-        if (Build.VERSION.SDK_INT >= 36 && now >= scheduled.start.minusMinutes(15) && now <= scheduled.end) {
+        if (Build.VERSION.SDK_INT >= 36 && now <= scheduled.end) {
             showLiveClass(scheduled, now)
         }
     }
@@ -147,23 +165,28 @@ class NotificationScheduler(private val context: Context) {
     @RequiresApi(36)
     fun showLiveClass(scheduled: ScheduledClass, now: LocalDateTime = LocalDateTime.now()) {
         if (!canNotify()) return
-        val totalMinutes = Duration.between(scheduled.start, scheduled.end).toMinutes().coerceAtLeast(1)
-        val elapsed = Duration.between(scheduled.start, now).toMinutes().coerceIn(0, totalMinutes)
-        val progress = (elapsed.toDouble() / totalMinutes * 1000).roundToInt()
+        val presentation = ClassNotificationPresenter.present(scheduled, now)
         val style = Notification.ProgressStyle()
             .setStyledByProgress(true)
-            .setProgress(progress)
+            .setProgress(presentation.progress)
             .setProgressTrackerIcon(Icon.createWithResource(context, R.drawable.ic_launcher_foreground))
             .addProgressSegment(Notification.ProgressStyle.Segment(1000).setColor(scheduled.course.colorArgb.toInt()))
         val extras = Bundle().apply { putBoolean("android.requestPromotedOngoing", true) }
         val notification = Notification.Builder(context, LIVE_CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(scheduled.course.name)
-            .setContentText("${scheduled.room.ifBlank { "教室待确认" }} · 至 ${scheduled.end.toLocalTime()}")
-            .setSubText("课迹 · 正在上课")
+            .setContentTitle(presentation.title)
+            .setContentText(presentation.text)
+            .setSubText(presentation.subText)
             .setContentIntent(contentIntent(scheduled))
+            .setWhen(scheduled.start.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli())
+            .setShowWhen(true)
+            .setUsesChronometer(true)
+            .setChronometerCountDown(presentation.upcoming)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
+            .setTimeoutAfter(
+                java.time.Duration.between(now, scheduled.end).toMillis().coerceAtLeast(1_000),
+            )
             .setCategory(Notification.CATEGORY_EVENT)
             .setVisibility(Notification.VISIBILITY_PRIVATE)
             .setStyle(style)
@@ -204,10 +227,11 @@ class NotificationScheduler(private val context: Context) {
         const val EXTRA_DATE = "date"
         const val EXTRA_MODE = "mode"
         const val MODE_REMINDER = "reminder"
-        const val MODE_LIVE = "live"
+        const val MODE_START = "start"
+        const val MODE_LIVE = "live" // 兼容旧版本已经登记的闹钟。
         const val MODE_END = "end"
         const val LIVE_NOTIFICATION_ID = 9001
-        private const val LIVE_CODE_MASK = 0x1357
+        private const val START_CODE_MASK = 0x1357
         private const val END_CODE_MASK = 0x2468
     }
 }

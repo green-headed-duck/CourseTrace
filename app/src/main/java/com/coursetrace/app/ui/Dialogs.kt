@@ -143,7 +143,7 @@ fun EditCourseDialog(
     course: Course,
     slot: CourseSlot,
     onDismiss: () -> Unit,
-    onConfirm: (String, String, Int, String, String, String, Int, Int, WeekPattern, Int, String) -> Unit,
+    onConfirm: (String, String, Int, String, String, String, Int, Int, WeekPattern, Int?, String) -> Unit,
 ) {
     var name by remember(course.id) { mutableStateOf(course.name) }
     var teacher by remember(course.id) { mutableStateOf(course.teacher) }
@@ -154,7 +154,7 @@ fun EditCourseDialog(
     var firstWeek by remember(slot.id) { mutableStateOf(slot.startWeek.toString()) }
     var lastWeek by remember(slot.id) { mutableStateOf(slot.endWeek.toString()) }
     var pattern by remember(slot.id) { mutableStateOf(slot.weekPattern) }
-    var reminder by remember(course.id) { mutableStateOf(course.defaultReminderMinutes.toString()) }
+    var reminder by remember(course.id) { mutableStateOf(course.reminderOverrideMinutes?.toString().orEmpty()) }
     var notes by remember(course.id) { mutableStateOf(course.notes) }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -194,7 +194,8 @@ fun EditCourseDialog(
                 OutlinedTextField(
                     reminder,
                     { reminder = it.filter(Char::isDigit) },
-                    label = { Text("提前提醒（分钟，0 为关闭）") },
+                    label = { Text("单独提醒分钟数") },
+                    supportingText = { Text("留空跟随设置；0 关闭这门课的提醒") },
                     singleLine = true,
                 )
                 OutlinedTextField(notes, { notes = it }, label = { Text("课程备注") }, minLines = 2)
@@ -208,7 +209,7 @@ fun EditCourseDialog(
                         firstWeek.toIntOrNull() ?: 1,
                         lastWeek.toIntOrNull() ?: 20,
                         pattern,
-                        reminder.toIntOrNull() ?: 15,
+                        reminder.toIntOrNull(),
                         notes,
                     )
                 },

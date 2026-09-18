@@ -157,7 +157,7 @@ fun SettingsScreen(
                     }
                 }
                 Text(
-                    "Android 16 会在临近/上课期间请求实时更新样式；小米超级岛是否展示仍由系统判定。",
+                    "实时状态会从所选提前时间开始：课前显示倒计时和准确开始时间，到点后才切换为“上课中”。小米超级岛是否展示仍由系统判定。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
