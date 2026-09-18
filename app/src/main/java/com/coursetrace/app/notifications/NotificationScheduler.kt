@@ -9,8 +9,6 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Color
-import android.graphics.drawable.Icon
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -166,21 +164,16 @@ class NotificationScheduler(private val context: Context) {
     fun showLiveClass(scheduled: ScheduledClass, now: LocalDateTime = LocalDateTime.now()) {
         if (!canNotify()) return
         val presentation = ClassNotificationPresenter.present(scheduled, now)
-        val style = Notification.ProgressStyle()
-            .setStyledByProgress(true)
-            .setProgress(presentation.progress)
-            .setProgressTrackerIcon(Icon.createWithResource(context, R.drawable.ic_launcher_foreground))
-            .addProgressSegment(Notification.ProgressStyle.Segment(1000).setColor(scheduled.course.colorArgb.toInt()))
         val extras = Bundle().apply { putBoolean("android.requestPromotedOngoing", true) }
-        val notification = Notification.Builder(context, LIVE_CHANNEL)
+        val builder = Notification.Builder(context, LIVE_CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(presentation.title)
+            .setContentTitle(presentation.compactTitle)
             .setContentText(presentation.text)
             .setSubText(presentation.subText)
             .setContentIntent(contentIntent(scheduled))
             .setWhen(scheduled.start.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli())
-            .setShowWhen(true)
-            .setUsesChronometer(true)
+            .setShowWhen(presentation.upcoming)
+            .setUsesChronometer(presentation.upcoming)
             .setChronometerCountDown(presentation.upcoming)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -189,9 +182,9 @@ class NotificationScheduler(private val context: Context) {
             )
             .setCategory(Notification.CATEGORY_EVENT)
             .setVisibility(Notification.VISIBILITY_PRIVATE)
-            .setStyle(style)
             .addExtras(extras)
-            .build()
+        if (!presentation.upcoming) builder.setShortCriticalText(presentation.criticalText)
+        val notification = builder.build()
         try {
             context.getSystemService(NotificationManager::class.java).notify(LIVE_NOTIFICATION_ID, notification)
         } catch (_: SecurityException) {

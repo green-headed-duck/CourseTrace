@@ -60,7 +60,7 @@ class ClassNotificationPresenterTest {
     }
 
     @Test
-    fun `before class shows countdown and exact start instead of ongoing`() {
+    fun `before class leaves countdown to chronometer and prioritizes room and exact times`() {
         val presentation = ClassNotificationPresenter.present(
             scheduled,
             LocalDateTime.of(2026, 9, 21, 13, 30),
@@ -68,10 +68,11 @@ class ClassNotificationPresenterTest {
 
         assertTrue(presentation.upcoming)
         assertEquals("数字电路 · 14:00上课", presentation.title)
-        assertTrue(presentation.text.contains("还有 30 分钟"))
-        assertTrue(presentation.text.contains("14:00–15:35"))
-        assertEquals("课迹 · 即将上课", presentation.subText)
-        assertEquals(0, presentation.progress)
+        assertEquals("数字电路 · 14:00", presentation.compactTitle)
+        assertEquals("数字电路", presentation.criticalText)
+        assertEquals("F3b-212 · 14:00上课 · 15:35下课", presentation.text)
+        assertFalse(presentation.text.contains("分钟"))
+        assertEquals("即将上课", presentation.subText)
     }
 
     @Test
@@ -80,8 +81,25 @@ class ClassNotificationPresenterTest {
 
         assertFalse(presentation.upcoming)
         assertEquals("数字电路 · 上课中", presentation.title)
-        assertTrue(presentation.text.contains("14:00 开始"))
-        assertTrue(presentation.text.contains("15:35 下课"))
-        assertEquals("课迹 · 上课中", presentation.subText)
+        assertTrue(presentation.text.startsWith("F3b-212"))
+        assertTrue(presentation.text.contains("14:00开始"))
+        assertTrue(presentation.text.contains("15:35下课"))
+        assertEquals("上课中", presentation.subText)
+    }
+
+    @Test
+    fun `live label is compact and can be overridden`() {
+        assertEquals(
+            "C++",
+            ClassNotificationPresenter.liveLabel(
+                course.copy(name = "人工智能II：C++编程基础"),
+            ),
+        )
+        assertEquals(
+            "程序设计",
+            ClassNotificationPresenter.liveLabel(
+                course.copy(liveDisplayName = "程序设计"),
+            ),
+        )
     }
 }

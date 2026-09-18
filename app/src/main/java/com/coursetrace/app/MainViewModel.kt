@@ -303,6 +303,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         endWeek: Int,
         pattern: WeekPattern,
         reminderMinutes: Int?,
+        liveDisplayName: String,
         notes: String,
     ) {
         viewModelScope.launch {
@@ -313,11 +314,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 require(reminderMinutes == null || reminderMinutes in 0..180) {
                     "提醒时间应留空，或填写 0 到 180 分钟"
                 }
+                require(liveDisplayName.length <= 12) { "超级岛简称最多 12 个字符" }
                 app.repository.upsertCourse(
                     course.copy(
                         name = name.trim(),
                         teacher = teacher.trim(),
                         reminderOverrideMinutes = reminderMinutes,
+                        liveDisplayName = liveDisplayName.trim(),
                         notes = notes.trim(),
                     ),
                     listOf(slot.copy(

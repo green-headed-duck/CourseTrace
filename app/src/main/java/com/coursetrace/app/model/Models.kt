@@ -35,6 +35,7 @@ data class Course(
     val teacher: String = "",
     val colorArgb: Long = 0xFF4F46E5,
     val reminderOverrideMinutes: Int? = null,
+    val liveDisplayName: String = "",
     val notes: String = "",
     val archived: Boolean = false,
 )

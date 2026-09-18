@@ -143,7 +143,7 @@ fun EditCourseDialog(
     course: Course,
     slot: CourseSlot,
     onDismiss: () -> Unit,
-    onConfirm: (String, String, Int, String, String, String, Int, Int, WeekPattern, Int?, String) -> Unit,
+    onConfirm: (String, String, Int, String, String, String, Int, Int, WeekPattern, Int?, String, String) -> Unit,
 ) {
     var name by remember(course.id) { mutableStateOf(course.name) }
     var teacher by remember(course.id) { mutableStateOf(course.teacher) }
@@ -155,6 +155,7 @@ fun EditCourseDialog(
     var lastWeek by remember(slot.id) { mutableStateOf(slot.endWeek.toString()) }
     var pattern by remember(slot.id) { mutableStateOf(slot.weekPattern) }
     var reminder by remember(course.id) { mutableStateOf(course.reminderOverrideMinutes?.toString().orEmpty()) }
+    var liveDisplayName by remember(course.id) { mutableStateOf(course.liveDisplayName) }
     var notes by remember(course.id) { mutableStateOf(course.notes) }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -198,6 +199,13 @@ fun EditCourseDialog(
                     supportingText = { Text("留空跟随设置；0 关闭这门课的提醒") },
                     singleLine = true,
                 )
+                OutlinedTextField(
+                    liveDisplayName,
+                    { liveDisplayName = it.take(12) },
+                    label = { Text("超级岛简称") },
+                    supportingText = { Text("建议 2–6 字；留空时自动精简课程名") },
+                    singleLine = true,
+                )
                 OutlinedTextField(notes, { notes = it }, label = { Text("课程备注") }, minLines = 2)
             }
         },
@@ -210,6 +218,7 @@ fun EditCourseDialog(
                         lastWeek.toIntOrNull() ?: 20,
                         pattern,
                         reminder.toIntOrNull(),
+                        liveDisplayName,
                         notes,
                     )
                 },

@@ -273,10 +273,10 @@ fun CourseTraceApp(viewModel: MainViewModel) {
                 course = course,
                 slot = slot,
                 onDismiss = { editingCourse = null },
-                onConfirm = { name, teacher, day, start, end, room, firstWeek, lastWeek, pattern, reminder, notes ->
+                onConfirm = { name, teacher, day, start, end, room, firstWeek, lastWeek, pattern, reminder, liveDisplayName, notes ->
                     viewModel.updateCourse(
                         course, slot, name, teacher, day, start, end, room,
-                        firstWeek, lastWeek, pattern, reminder, notes,
+                        firstWeek, lastWeek, pattern, reminder, liveDisplayName, notes,
                     )
                     editingCourse = null
                 },
