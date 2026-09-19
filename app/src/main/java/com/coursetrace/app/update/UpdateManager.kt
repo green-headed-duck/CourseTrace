@@ -54,10 +54,10 @@ class UpdateManager(private val context: Context) {
     }
 
     suspend fun downloadAndInstall(manifest: UpdateManifest): Result<File> = withContext(Dispatchers.IO) {
+        val apk = File(File(context.cacheDir, "updates"), "coursetrace-${manifest.versionCode}.apk")
         runCatching {
             require(verifyManifest(manifest)) { "更新清单签名无效" }
-            val directory = File(context.cacheDir, "updates").apply { mkdirs() }
-            val apk = File(directory, "coursetrace-${manifest.versionCode}.apk")
+            apk.parentFile?.mkdirs()
             download(manifest.apkUrl, apk, 300L * 1024 * 1024)
             val digest = MessageDigest.getInstance("SHA-256")
             apk.inputStream().use { input ->
@@ -73,7 +73,7 @@ class UpdateManager(private val context: Context) {
             verifyApk(apk, manifest)
             withContext(Dispatchers.Main) { launchInstaller(apk) }
             apk
-        }
+        }.onFailure { apk.delete() }
     }
 
     private fun verifyManifest(manifest: UpdateManifest): Boolean = runCatching {
@@ -126,10 +126,7 @@ class UpdateManager(private val context: Context) {
     }
 
     private fun get(url: String, maxBytes: Int): ByteArray {
-        val connection = URL(url).openConnection() as HttpURLConnection
-        connection.connectTimeout = 15_000
-        connection.readTimeout = 30_000
-        connection.instanceFollowRedirects = false
+        val connection = openFollowingHttpsRedirects(url, 15_000, 30_000)
         try {
             require(connection.responseCode in 200..299) { "更新服务器返回 HTTP ${connection.responseCode}" }
             val length = connection.contentLengthLong
@@ -153,16 +150,15 @@ class UpdateManager(private val context: Context) {
     }
 
     private fun download(url: String, target: File, maxBytes: Long) {
-        val connection = URL(url).openConnection() as HttpURLConnection
-        connection.connectTimeout = 20_000
-        connection.readTimeout = 120_000
-        connection.instanceFollowRedirects = false
+        val partial = File(target.parentFile, "${target.name}.part")
+        partial.delete()
+        val connection = openFollowingHttpsRedirects(url, 20_000, 120_000)
         try {
             require(connection.responseCode in 200..299) { "APK 服务器返回 HTTP ${connection.responseCode}" }
             val length = connection.contentLengthLong
             require(length < 0 || length <= maxBytes) { "APK 文件异常过大" }
             connection.inputStream.use { input ->
-                target.outputStream().use { output ->
+                partial.outputStream().use { output ->
                     val buffer = ByteArray(64 * 1024)
                     var total = 0L
                     while (true) {
@@ -174,12 +170,54 @@ class UpdateManager(private val context: Context) {
                     }
                 }
             }
+            if (target.exists()) require(target.delete()) { "无法替换旧更新包" }
+            require(partial.renameTo(target)) { "无法保存更新包" }
+        } catch (error: Throwable) {
+            partial.delete()
+            throw error
         } finally {
             connection.disconnect()
         }
     }
 
+    private fun openFollowingHttpsRedirects(
+        initialUrl: String,
+        connectTimeoutMillis: Int,
+        readTimeoutMillis: Int,
+    ): HttpURLConnection {
+        var current = URL(initialUrl)
+        requireHttps(current)
+        for (redirectCount in 0..MAX_HTTPS_REDIRECTS) {
+            val connection = (current.openConnection() as HttpURLConnection).apply {
+                connectTimeout = connectTimeoutMillis
+                readTimeout = readTimeoutMillis
+                instanceFollowRedirects = false
+                setRequestProperty("User-Agent", "CourseTrace-Android/${BuildConfig.VERSION_NAME}")
+                setRequestProperty("Accept", "application/octet-stream, application/json")
+            }
+            val code = connection.responseCode
+            if (code !in REDIRECT_STATUS_CODES) return connection
+            val location = connection.getHeaderField("Location")
+            connection.disconnect()
+            require(redirectCount < MAX_HTTPS_REDIRECTS && !location.isNullOrBlank()) { "更新下载重定向过多或无效" }
+            current = URL(current, location)
+            requireHttps(current)
+        }
+        error("更新下载重定向过多")
+    }
+
+    private fun requireHttps(url: URL) {
+        require(
+            url.protocol.equals("https", ignoreCase = true) &&
+                url.host.isNotBlank() &&
+                url.userInfo == null &&
+                url.ref == null
+        ) { "更新地址及重定向必须使用 HTTPS" }
+    }
+
     companion object {
+        private const val MAX_HTTPS_REDIRECTS = 5
+        private val REDIRECT_STATUS_CODES = setOf(301, 302, 303, 307, 308)
         private const val UPDATE_PUBLIC_KEY_BASE64 = "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEBB4JOEe0kjBaisMW2FlKpq6xymwllaaTm8w8z3XF9Smkr9edfJoSwzwusvYTA5usf7Fv0kHboHHacoyVSe0/Ig=="
     }
 }

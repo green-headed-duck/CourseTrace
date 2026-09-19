@@ -31,6 +31,7 @@ import com.coursetrace.app.model.StudyProject
 import com.coursetrace.app.model.Term
 import com.coursetrace.app.model.WeekPattern
 import com.coursetrace.app.model.DEFAULT_HOLIDAY_FEED_URL
+import com.coursetrace.app.model.DEFAULT_UPDATE_MANIFEST_URL
 import com.coursetrace.app.domain.HolidayCalendarPolicy
 import com.coursetrace.app.notifications.EarlyAlarmService
 import com.coursetrace.app.notifications.NotificationScheduler
@@ -168,13 +169,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun checkForUpdates() {
         viewModelScope.launch {
             val preferences = appState.value.preferences
-            if (preferences.updateManifestUrl.isBlank()) {
-                _workStatus.value = WorkStatus(message = "请先填写 HTTPS 更新清单地址")
-                return@launch
-            }
-            _workStatus.value = WorkStatus(busy = true, message = "正在检查更新…")
+            val manifestUrl = preferences.updateManifestUrl.ifBlank { DEFAULT_UPDATE_MANIFEST_URL }
+            val isGitHubDefault = manifestUrl == DEFAULT_UPDATE_MANIFEST_URL
+            _workStatus.value = WorkStatus(
+                busy = true,
+                message = if (isGitHubDefault) "正在连接 GitHub 更新通道…" else "正在检查更新…",
+            )
             val manager = UpdateManager(app)
-            manager.check(preferences.updateManifestUrl, preferences.updateChannel).fold(
+            manager.check(manifestUrl, preferences.updateChannel).fold(
                 onSuccess = { result ->
                     when (result) {
                         UpdateCheckResult.UpToDate -> _workStatus.value = WorkStatus(message = "当前已是最新版本")

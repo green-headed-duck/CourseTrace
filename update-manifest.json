@@ -1,0 +1,9 @@
+{
+  "versionCode": 15,
+  "versionName": "0.3.1",
+  "apkUrl": "https://github.com/green-headed-duck/CourseTrace/releases/download/v0.3.1/CourseTrace-0.3.1-release.apk",
+  "sha256": "04587ac08c5df7aeb70201afea93d86deee28daa9ee7e84bb7be66a522c69268",
+  "signature": "MEUCIDKgxaFLgDtiH4dg8sKgoJ59uc/Yo0owrN5eiV+BVaYJAiEAgle5LGu4AWs48jwLCy7cKpwc9DRaTKFOnFAAICTjG7I=",
+  "channel": "stable",
+  "notes": "默认接入 GitHub 一键更新，无需登录；安全支持 Release HTTPS 重定向。"
+}

@@ -18,7 +18,7 @@
 - 课程和 FPGA 等自学项目的资料、课堂原文、错题、痛点、进度与下次资料预测。
 - App 私有目录中的真实 Git 仓库，修改后自动提交；大资料只记录 URI 与 SHA-256，不塞进 Git。
 - AES-256-GCM 加密备份，可通过系统文件选择器保存到本地、网盘或 WebDAV 文件提供器。
-- HTTPS 签名更新清单、APK SHA-256、包名/版本/安装签名四重校验；仍由 Android 系统安装器要求用户确认。
+- 默认接入公开 GitHub Release 更新通道，应用内一键检查和下载，无需登录 GitHub；签名清单、APK SHA-256、包名/版本/安装签名四重校验后仍由 Android 系统安装器要求用户确认。
 - 生物识别/设备凭据应用锁、锁屏敏感通知保护；无 root、无隐藏 API、无无障碍自动化、无屏幕监听。
 
 ## 构建
@@ -67,16 +67,16 @@ ChatGPT 无法被动读取其他历史会话。只有 Skill 活跃时追加或�
 
 ## 更新包
 
-更新清单签名私钥在 `.secrets/update-signing-private.pem`，公钥已固化到应用。生成新 APK 后：
+默认更新端点是公开仓库根目录的 [`update-manifest.json`](update-manifest.json)，因此普通用户无需填写地址或登录 GitHub。更新清单签名私钥在 `.secrets/update-signing-private.pem`，公钥已固化到应用。生成新 APK 后：
 
 ```powershell
 .\tools\sign-update-manifest.ps1 `
   -ApkPath .\app\build\outputs\apk\release\app-release.apk `
-  -VersionCode 14 -VersionName 0.3.0 `
-  -ApkUrl https://你的域名/downloads/coursetrace-0.3.0.apk
+  -VersionCode 15 -VersionName 0.3.1 `
+  -ApkUrl https://github.com/green-headed-duck/CourseTrace/releases/download/v0.3.1/CourseTrace-0.3.1-release.apk
 ```
 
-把 APK 与生成的 `update-manifest.json` 放到 HTTPS 站点，在应用“更新设置”中填写清单地址。后续版本必须沿用同一 Android keystore 和更新清单私钥。
+将生成的 `update-manifest.json` 提交到仓库 `main` 分支，并把 APK 上传到相应 GitHub Release。后续版本必须沿用同一 Android keystore 和更新清单私钥。设置页仍允许高级用户替换其他 HTTPS 签名清单。
 
 ## 安全边界
 
@@ -84,4 +84,4 @@ ChatGPT 无法被动读取其他历史会话。只有 Skill 活跃时追加或�
 
 ## 当前验证版本
 
-`0.3.0`（versionCode 14）默认开启国家法定节假日自动调整，内置 2026 年官方日期并支持离线生效。设置页可以替换可信的 HTTPS JSON 来源；放假自动停课，明确提供 `FOLLOW_DATE` 的来源可自动补课，普通调休工作日不会在缺少学校安排时擅自猜课。后台最多每 12 小时检查一次，并在规则变化后重新安排提醒。本版暂不接入学校校历。数据源格式见 [`calendar/README.md`](calendar/README.md)。
+`0.3.1`（versionCode 15）默认接入公开 GitHub Release 更新通道，点击即可在应用内检查、下载并校验更新，不需要 GitHub 账号。支持 GitHub 的安全 HTTPS 重定向，同时保留自定义签名清单入口；最终安装仍由 Android 系统确认。0.3.0 的国家节假日自动调整、可替换数据源与离线规则继续保留。

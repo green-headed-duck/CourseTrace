@@ -91,6 +91,7 @@ import com.coursetrace.app.model.ThemeMode
 import com.coursetrace.app.BuildConfig
 import com.coursetrace.app.domain.AppearancePolicy
 import com.coursetrace.app.model.DEFAULT_HOLIDAY_FEED_URL
+import com.coursetrace.app.model.DEFAULT_UPDATE_MANIFEST_URL
 
 @Composable
 fun SettingsScreen(
@@ -465,15 +466,22 @@ fun SettingsScreen(
         }
         item {
             SettingsSection("应用更新", Icons.Outlined.SystemUpdate) {
-                Text("${if (state.preferences.updateChannel == "stable") "稳定" else "测试"}通道 · 当前 ${BuildConfig.VERSION_NAME}", fontWeight = FontWeight.SemiBold)
+                val updateUrl = state.preferences.updateManifestUrl.ifBlank { DEFAULT_UPDATE_MANIFEST_URL }
+                val sourceLabel = if (updateUrl == DEFAULT_UPDATE_MANIFEST_URL) "GitHub Release" else "自定义来源"
+                Text("$sourceLabel · ${if (state.preferences.updateChannel == "stable") "稳定" else "测试"}通道 · 当前 ${BuildConfig.VERSION_NAME}", fontWeight = FontWeight.SemiBold)
                 Text(
-                    "支持 HTTPS 签名清单、SHA-256 校验与系统安装器确认。无法静默安装，也不会请求 root。",
+                    "点击即可检查并下载公开仓库的新版本，不需要登录 GitHub。下载后会验证签名清单、SHA-256、包名和安装签名。",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    "Android 仍会要求你确认安装；课迹不会请求 root 或绕过系统安装器。",
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { showUpdateDialog = true }, modifier = Modifier.weight(1f)) { Text("更新设置") }
-                    Button(onClick = onCheckUpdate, enabled = !busy, modifier = Modifier.weight(1f)) { Text("检查并安装") }
+                    Button(onClick = onCheckUpdate, enabled = !busy, modifier = Modifier.weight(1f)) { Text("检查并更新") }
                 }
             }
         }
@@ -549,7 +557,7 @@ fun SettingsScreen(
     }
     if (showUpdateDialog) {
         UpdateSettingsDialog(
-            initialUrl = state.preferences.updateManifestUrl,
+            initialUrl = state.preferences.updateManifestUrl.ifBlank { DEFAULT_UPDATE_MANIFEST_URL },
             initialChannel = state.preferences.updateChannel,
             onDismiss = { showUpdateDialog = false },
             onSave = { url, channel ->
@@ -978,11 +986,18 @@ private fun UpdateSettingsDialog(
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                 )
+                OutlinedButton(
+                    onClick = { url = DEFAULT_UPDATE_MANIFEST_URL; channel = "stable" },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("恢复 GitHub 默认更新通道") }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(selected = channel == "stable", onClick = { channel = "stable" }, label = { Text("稳定") })
                     FilterChip(selected = channel == "beta", onClick = { channel = "beta" }, label = { Text("测试") })
                 }
-                Text("签名私钥保存在开发电脑的 .secrets 目录，不会进入 Git 或 APK。", style = MaterialTheme.typography.bodySmall)
+                Text(
+                    "默认通道读取公开仓库，不需要 GitHub 账号。签名私钥只保存在开发电脑，不会进入 Git 或 APK。",
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
         },
         confirmButton = { Button(onClick = { onSave(url, channel) }, enabled = url.isBlank() || url.startsWith("https://")) { Text("保存") } },

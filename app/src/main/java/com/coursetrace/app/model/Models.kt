@@ -24,6 +24,9 @@ enum class CalendarRuleType { NO_CLASS, WORKDAY, FOLLOW_DATE }
 const val DEFAULT_HOLIDAY_FEED_URL: String =
     "https://raw.githubusercontent.com/green-headed-duck/CourseTrace/main/calendar/china-holidays.json"
 
+const val DEFAULT_UPDATE_MANIFEST_URL: String =
+    "https://raw.githubusercontent.com/green-headed-duck/CourseTrace/main/update-manifest.json"
+
 @Serializable
 data class Term(
     val id: String = UUID.randomUUID().toString(),
@@ -213,7 +216,7 @@ data class AppPreferences(
     val rawTranscriptByDefault: Boolean = true,
     val encryptedRemoteBackupEnabled: Boolean = false,
     val updateChannel: String = "stable",
-    val updateManifestUrl: String = "",
+    val updateManifestUrl: String = DEFAULT_UPDATE_MANIFEST_URL,
     val apiProfile: ApiProfile = ApiProfile(),
     val chatGptLink: ChatGptLinkProfile = ChatGptLinkProfile(),
     val scheduleTimeProfile: ScheduleTimeProfile = ScheduleTimeProfile(),
