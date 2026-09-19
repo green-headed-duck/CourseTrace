@@ -21,6 +21,8 @@ import com.coursetrace.app.model.AppPreferences
 import com.coursetrace.app.model.AppState
 import com.coursetrace.app.model.Course
 import com.coursetrace.app.model.CourseSlot
+import com.coursetrace.app.model.CalendarDayOverride
+import com.coursetrace.app.model.CalendarRuleType
 import com.coursetrace.app.model.ImportDraft
 import com.coursetrace.app.model.ImportSource
 import com.coursetrace.app.model.LearningEventKind
@@ -163,6 +165,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 },
                 onFailure = ::showError,
             )
+        }
+    }
+
+    fun setCalendarDayOverride(date: String, sourceDate: String?) {
+        viewModelScope.launch {
+            runCatching {
+                val target = LocalDate.parse(date)
+                val state = app.repository.state.value
+                val baseRule = state.calendarDayRules.find {
+                    it.date == date && it.sourceUrl == state.preferences.holidaySync.sourceUrl
+                } ?: error("这一天没有可调整的调休规则")
+                require(baseRule.type != CalendarRuleType.NO_CLASS) { "放假日不能复制其他日期课表" }
+                if (sourceDate == null) {
+                    app.repository.removeCalendarDayOverride(date)
+                } else {
+                    val source = LocalDate.parse(sourceDate)
+                    require(source != target) { "对应课表日期不能与调休日相同" }
+                    val term = state.activeTermId?.let { id -> state.terms.find { it.id == id } }
+                        ?: error("请先设置当前学期")
+                    require(ScheduleEngine.weekNumber(term, source) in 1..term.weekCount) {
+                        "对应日期不在当前学期范围内"
+                    }
+                    app.repository.setCalendarDayOverride(
+                        CalendarDayOverride(
+                            date = target.toString(),
+                            sourceDate = source.toString(),
+                            updatedAt = OffsetDateTime.now().toString(),
+                        ),
+                    )
+                }
+                NotificationScheduler(app).reschedule(app.repository.state.value)
+            }.onSuccess {
+                _workStatus.value = WorkStatus(
+                    message = if (sourceDate == null) "已恢复数据源提供的调休规则" else "已改为按 $sourceDate 的课表上课",
+                )
+            }.onFailure(::showError)
         }
     }
 

@@ -10,7 +10,7 @@
 - 多学期、单双周/指定周、课程时间与教室；PDF 识别草稿必须预览后才写入。
 - 华南理工大学大学城/国际校区第 1—11 节作息模板；PDF 只有“第几节”时自动换算准确时间。
 - 今日、周总览、课程编辑/移出课表，以及“下一节课”桌面组件。
-- 默认自动应用国家法定节假日：放假日停止排课，调休工作日明确标注；支持更换可信的 HTTPS JSON 来源。国家通知未指定学校补课映射时不会擅自猜测，数据源可用 `FOLLOW_DATE` 明确指定。
+- 默认自动应用国家法定节假日：放假日停止排课，调休工作日明确标注；调休日可快捷选择“将 A 日改为 B 日课表”，本地选择不会被联网同步覆盖。支持更换可信的 HTTPS JSON 来源，数据源也可用 `FOLLOW_DATE` 明确指定。
 - OpenAI 兼容中转接口，默认配置 `https://api.apiyi.com/v1` / `gpt-5.6-luna`；模型名可单独编辑，Key 仅存 Android Keystore。
 - ChatGPT Mobile 系统分享与课堂 JSON 专用导入；摘要、问题、错题、痛点、进度、结论和原文分别归档，不必猜测粘贴框。另有为未来/兼容工作区准备的自托管 CourseTrace MCP 中继；ChatGPT Pro 推理与 PDF API 中转互不混用。
 - 上课前默认 15 分钟本地提醒、Android 16 临近/上课实时更新样式、点通知直达对应课程；精确提醒无权限时自动降级。
@@ -72,8 +72,8 @@ ChatGPT 无法被动读取其他历史会话。只有 Skill 活跃时追加或�
 ```powershell
 .\tools\sign-update-manifest.ps1 `
   -ApkPath .\app\build\outputs\apk\release\app-release.apk `
-  -VersionCode 15 -VersionName 0.3.1 `
-  -ApkUrl https://github.com/green-headed-duck/CourseTrace/releases/download/v0.3.1/CourseTrace-0.3.1-release.apk
+  -VersionCode 16 -VersionName 0.3.2 `
+  -ApkUrl https://github.com/green-headed-duck/CourseTrace/releases/download/v0.3.2/CourseTrace-0.3.2-release.apk
 ```
 
 将生成的 `update-manifest.json` 提交到仓库 `main` 分支，并把 APK 上传到相应 GitHub Release。后续版本必须沿用同一 Android keystore 和更新清单私钥。设置页仍允许高级用户替换其他 HTTPS 签名清单。
@@ -84,4 +84,4 @@ ChatGPT 无法被动读取其他历史会话。只有 Skill 活跃时追加或�
 
 ## 当前验证版本
 
-`0.3.1`（versionCode 15）默认接入公开 GitHub Release 更新通道，点击即可在应用内检查、下载并校验更新，不需要 GitHub 账号。支持 GitHub 的安全 HTTPS 重定向，同时保留自定义签名清单入口；最终安装仍由 Android 系统确认。0.3.0 的国家节假日自动调整、可替换数据源与离线规则继续保留。
+`0.3.2`（versionCode 16）为调休工作日增加 A→B 课表快捷映射。可以从附近工作日快速选择或输入精确日期，课程、教室和单双周按 B 日判断，实际上课与提醒仍落在 A 日；本地覆盖不会被节假日联网同步清除。0.3.1 的免登录 GitHub 一键更新继续保留。

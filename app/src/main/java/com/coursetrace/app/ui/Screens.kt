@@ -50,6 +50,7 @@ import androidx.compose.material.icons.outlined.School
 import androidx.compose.material.icons.outlined.Verified
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -61,9 +62,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -81,8 +84,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.coursetrace.app.domain.ScheduleEngine
 import com.coursetrace.app.domain.ScheduledClass
+import com.coursetrace.app.domain.ResolvedCalendarDayRule
 import com.coursetrace.app.model.AppState
-import com.coursetrace.app.model.CalendarDayRule
 import com.coursetrace.app.model.CalendarRuleType
 import com.coursetrace.app.model.Course
 import com.coursetrace.app.model.ImportDraft
@@ -102,7 +105,9 @@ fun TodayScreen(
     onAddCourse: () -> Unit,
     onCourseClick: (Course) -> Unit,
     onStartSession: (String, String, String) -> Unit,
+    onSetCalendarDayOverride: (String, String?) -> Unit,
 ) {
+    var editingCalendarRule by remember { mutableStateOf<ResolvedCalendarDayRule?>(null) }
     val now = remember { LocalDateTime.now() }
     val today = now.toLocalDate()
     val classes = ScheduleEngine.classesOn(state, today)
@@ -130,7 +135,7 @@ fun TodayScreen(
             }
         }
         ScheduleEngine.dayRule(state, today)?.let { rule ->
-            item { CalendarRuleBanner(rule) }
+            item { CalendarRuleBanner(rule, onEdit = { editingCalendarRule = rule }) }
         }
         item {
             if (next != null) {
@@ -182,6 +187,16 @@ fun TodayScreen(
                 else "已按时间顺序保存 $totalEvents 条学习事件，原文同时进入本地 Git 历史。",
             )
         }
+    }
+    editingCalendarRule?.let { rule ->
+        WorkdayScheduleDialog(
+            rule = rule,
+            onDismiss = { editingCalendarRule = null },
+            onApply = { sourceDate ->
+                onSetCalendarDayOverride(rule.date, sourceDate)
+                editingCalendarRule = null
+            },
+        )
     }
 }
 
@@ -319,7 +334,9 @@ fun ScheduleScreen(
     onCourseClick: (Course) -> Unit,
     onCommitImport: (String) -> Unit,
     onManageTerms: () -> Unit,
+    onSetCalendarDayOverride: (String, String?) -> Unit,
 ) {
+    var editingCalendarRule by remember { mutableStateOf<ResolvedCalendarDayRule?>(null) }
     var selectedDate by rememberSaveable { mutableStateOf(LocalDate.now()) }
     var weekOverview by rememberSaveable { mutableStateOf(true) }
     val monday = selectedDate.minusDays((selectedDate.dayOfWeek.value - 1).toLong())
@@ -415,7 +432,7 @@ fun ScheduleScreen(
                     }
                 }
                 ScheduleEngine.dayRule(state, selectedDate)?.let { rule ->
-                    item { CalendarRuleBanner(rule) }
+                    item { CalendarRuleBanner(rule, onEdit = { editingCalendarRule = rule }) }
                 }
             }
             items(state.importDrafts, key = { it.id }) { draft ->
@@ -436,6 +453,16 @@ fun ScheduleScreen(
                 items(classes, key = { it.slot.id }) { TimelineClassCard(it, LocalDateTime.now(), onCourseClick) }
             }
         }
+    }
+    editingCalendarRule?.let { rule ->
+        WorkdayScheduleDialog(
+            rule = rule,
+            onDismiss = { editingCalendarRule = null },
+            onApply = { sourceDate ->
+                onSetCalendarDayOverride(rule.date, sourceDate)
+                editingCalendarRule = null
+            },
+        )
     }
 }
 
@@ -520,7 +547,7 @@ private fun WeeklyOverview(
 }
 
 @Composable
-private fun CalendarRuleBanner(rule: CalendarDayRule) {
+private fun CalendarRuleBanner(rule: ResolvedCalendarDayRule, onEdit: () -> Unit) {
     val detail = when (rule.type) {
         CalendarRuleType.NO_CLASS -> "当天课程已按国家节假日自动暂停"
         CalendarRuleType.WORKDAY -> "国家调休工作日；当前来源未指定补哪天课程"
@@ -537,10 +564,87 @@ private fun CalendarRuleBanner(rule: CalendarDayRule) {
             Column(Modifier.weight(1f)) {
                 Text(rule.title, fontWeight = FontWeight.SemiBold)
                 Text(detail, style = MaterialTheme.typography.bodySmall)
-                Text(rule.sourceName, style = MaterialTheme.typography.labelSmall)
+                Text(
+                    if (rule.isUserOverride) "本机自定义 · ${rule.sourceName}" else rule.sourceName,
+                    style = MaterialTheme.typography.labelSmall,
+                )
+                if (rule.baseRule.type != CalendarRuleType.NO_CLASS) {
+                    TextButton(onClick = onEdit) {
+                        Text(if (rule.sourceDate == null) "选择对应课表" else "更换对应课表")
+                    }
+                }
             }
         }
     }
+}
+
+@Composable
+private fun WorkdayScheduleDialog(
+    rule: ResolvedCalendarDayRule,
+    onDismiss: () -> Unit,
+    onApply: (String?) -> Unit,
+) {
+    val target = remember(rule.date) { LocalDate.parse(rule.date) }
+    var selectedDate by remember(rule.date, rule.sourceDate) { mutableStateOf(rule.sourceDate.orEmpty()) }
+    val parsedDate = remember(selectedDate) { runCatching { LocalDate.parse(selectedDate.trim()) }.getOrNull() }
+    val candidates = remember(target) {
+        (-7L..7L)
+            .filter { it != 0L }
+            .map(target::plusDays)
+            .filter { it.dayOfWeek.value in 1..5 }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("选择对应课表") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("${rule.date} 是调休上班日。选择 B 日后，当天会复制 B 日的课程、教室和单双周安排，实际上课时间仍落在 ${rule.date}。")
+                Text("附近日期快捷选择", fontWeight = FontWeight.SemiBold)
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    candidates.forEach { candidate ->
+                        FilterChip(
+                            selected = selectedDate == candidate.toString(),
+                            onClick = { selectedDate = candidate.toString() },
+                            label = {
+                                Text("${candidate.format(DateTimeFormatter.ofPattern("M/d"))} ${ScheduleEngine.dayLabel(candidate.dayOfWeek.value)}")
+                            },
+                        )
+                    }
+                }
+                OutlinedTextField(
+                    value = selectedDate,
+                    onValueChange = { selectedDate = it },
+                    label = { Text("B 日，YYYY-MM-DD") },
+                    supportingText = { Text("也可以直接输入学期内任意日期") },
+                    isError = selectedDate.isNotBlank() && (parsedDate == null || parsedDate == target),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    "这是本机覆盖规则，后续联网更新节假日来源时不会被清除。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onApply(requireNotNull(parsedDate).toString()) },
+                enabled = parsedDate != null && parsedDate != target,
+            ) { Text("应用 B 日课表") }
+        },
+        dismissButton = {
+            Row {
+                if (rule.isUserOverride) {
+                    TextButton(onClick = { onApply(null) }) { Text("恢复来源规则") }
+                }
+                TextButton(onClick = onDismiss) { Text("取消") }
+            }
+        },
+    )
 }
 
 @Composable

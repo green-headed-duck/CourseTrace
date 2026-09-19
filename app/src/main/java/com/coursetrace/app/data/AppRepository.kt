@@ -16,6 +16,7 @@ import com.coursetrace.app.model.Term
 import com.coursetrace.app.domain.AcademicTermPolicy
 import com.coursetrace.app.domain.HolidayCalendarPolicy
 import com.coursetrace.app.model.CalendarDayRule
+import com.coursetrace.app.model.CalendarDayOverride
 import com.coursetrace.app.model.HolidaySyncProfile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -140,6 +141,18 @@ class AppRepository(context: Context) {
                 calendarDayRules = rules,
                 preferences = state.preferences.copy(holidaySync = profile),
             )
+        }
+
+    suspend fun setCalendarDayOverride(override: CalendarDayOverride) =
+        update("设置调休对应课表：${override.date}") { state ->
+            state.copy(
+                calendarDayOverrides = state.calendarDayOverrides.filterNot { it.date == override.date } + override,
+            )
+        }
+
+    suspend fun removeCalendarDayOverride(date: String) =
+        update("恢复调休来源规则：$date") { state ->
+            state.copy(calendarDayOverrides = state.calendarDayOverrides.filterNot { it.date == date })
         }
 
     suspend fun addTerm(term: Term, makeActive: Boolean = true) =

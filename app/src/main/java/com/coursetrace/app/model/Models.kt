@@ -92,6 +92,13 @@ data class CalendarDayRule(
 )
 
 @Serializable
+data class CalendarDayOverride(
+    val date: String,
+    val sourceDate: String,
+    val updatedAt: String,
+)
+
+@Serializable
 data class MaterialItem(
     val id: String = UUID.randomUUID().toString(),
     val ownerId: String,
@@ -281,6 +288,7 @@ data class AppState(
     val slots: List<CourseSlot> = emptyList(),
     val exceptions: List<ScheduleException> = emptyList(),
     val calendarDayRules: List<CalendarDayRule> = emptyList(),
+    val calendarDayOverrides: List<CalendarDayOverride> = emptyList(),
     val materials: List<MaterialItem> = emptyList(),
     val sessions: List<LearningSession> = emptyList(),
     val events: List<LearningEvent> = emptyList(),

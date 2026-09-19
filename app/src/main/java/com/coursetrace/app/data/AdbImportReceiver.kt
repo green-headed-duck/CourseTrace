@@ -73,7 +73,8 @@ class AdbImportReceiver : BroadcastReceiver() {
             TAG,
                 "AUDIT term=${term?.name}; start=${term?.startDate}; weeks=${term?.weekCount}; " +
                 "courses=${state.courses.count { !it.archived }}; slots=${state.slots.size}; drafts=${state.importDrafts.size}; " +
-                "holidayRules=${state.calendarDayRules.size}; holidaySource=${state.preferences.holidaySync.sourceName}; " +
+                "holidayRules=${state.calendarDayRules.size}; holidayOverrides=${state.calendarDayOverrides.size}; " +
+                "holidaySource=${state.preferences.holidaySync.sourceName}; " +
                 "git=${history.joinToString(" | ") { it.message }}",
         )
         state.courses.filterNot { it.archived }.forEach { course ->

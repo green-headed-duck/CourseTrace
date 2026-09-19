@@ -4,6 +4,7 @@ import com.coursetrace.app.model.AppState
 import com.coursetrace.app.model.Course
 import com.coursetrace.app.model.CourseSlot
 import com.coursetrace.app.model.CalendarDayRule
+import com.coursetrace.app.model.CalendarDayOverride
 import com.coursetrace.app.model.CalendarRuleType
 import com.coursetrace.app.model.AppPreferences
 import com.coursetrace.app.model.DEFAULT_HOLIDAY_FEED_URL
@@ -131,6 +132,73 @@ class ScheduleEngineTest {
         assertEquals(1, classes.size)
         assertEquals(LocalDate.parse("2026-09-20"), classes.single().date)
         assertTrue(classes.single().note.contains("补课"))
+    }
+
+    @Test
+    fun localOverrideCopiesChosenDateForWorkdayAndSurvivesAsSeparateData() {
+        val term = Term(name = "测试学期", startDate = "2026-08-31", weekCount = 22)
+        val course = Course(termId = term.id, name = "数字电路")
+        val slot = CourseSlot(
+            courseId = course.id,
+            dayOfWeek = 5,
+            startTime = "08:50",
+            endTime = "10:25",
+            weekPattern = WeekPattern.EVEN,
+        )
+        val rule = CalendarDayRule(
+            id = "workday",
+            date = "2026-09-20",
+            type = CalendarRuleType.WORKDAY,
+            title = "国庆节调休工作日",
+            sourceUrl = DEFAULT_HOLIDAY_FEED_URL,
+            sourceName = "国务院办公厅",
+        )
+        val override = CalendarDayOverride(
+            date = "2026-09-20",
+            sourceDate = "2026-09-25",
+            updatedAt = "2026-09-19T10:00:00+08:00",
+        )
+        val state = AppState(
+            terms = listOf(term),
+            courses = listOf(course),
+            slots = listOf(slot),
+            calendarDayRules = listOf(rule),
+            calendarDayOverrides = listOf(override),
+            activeTermId = term.id,
+        )
+
+        val resolved = ScheduleEngine.dayRule(state, LocalDate.parse("2026-09-20"))
+        val classes = ScheduleEngine.classesOn(state, LocalDate.parse("2026-09-20"))
+
+        assertEquals(CalendarRuleType.FOLLOW_DATE, resolved?.type)
+        assertTrue(resolved?.isUserOverride == true)
+        assertEquals("2026-09-25", resolved?.sourceDate)
+        assertEquals(1, classes.size)
+        assertTrue(classes.single().note.contains("2026-09-25"))
+        assertEquals(CalendarRuleType.WORKDAY, state.calendarDayRules.single().type)
+    }
+
+    @Test
+    fun localOverrideCannotTurnOfficialHolidayIntoClassDay() {
+        val rule = CalendarDayRule(
+            id = "holiday",
+            date = "2026-10-01",
+            type = CalendarRuleType.NO_CLASS,
+            title = "国庆节",
+            sourceUrl = DEFAULT_HOLIDAY_FEED_URL,
+            sourceName = "国务院办公厅",
+        )
+        val state = AppState(
+            calendarDayRules = listOf(rule),
+            calendarDayOverrides = listOf(
+                CalendarDayOverride("2026-10-01", "2026-09-28", "2026-09-19T10:00:00+08:00"),
+            ),
+        )
+
+        val resolved = ScheduleEngine.dayRule(state, LocalDate.parse("2026-10-01"))
+
+        assertEquals(CalendarRuleType.NO_CLASS, resolved?.type)
+        assertTrue(resolved?.isUserOverride == false)
     }
 
     @Test

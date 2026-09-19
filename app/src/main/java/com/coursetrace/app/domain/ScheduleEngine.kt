@@ -23,6 +23,17 @@ data class ScheduledClass(
     val note: String = "",
 )
 
+data class ResolvedCalendarDayRule(
+    val baseRule: CalendarDayRule,
+    val type: CalendarRuleType,
+    val sourceDate: String?,
+    val isUserOverride: Boolean,
+) {
+    val date: String get() = baseRule.date
+    val title: String get() = baseRule.title
+    val sourceName: String get() = baseRule.sourceName
+}
+
 object ScheduleEngine {
     fun weekNumber(term: Term, date: LocalDate): Int {
         val start = LocalDate.parse(term.startDate)
@@ -76,7 +87,9 @@ object ScheduleEngine {
                     end = date.atTime(endTime),
                     room = exception?.replacementRoom ?: slot.room,
                     note = listOfNotNull(
-                        dayRule?.takeIf { it.type == CalendarRuleType.FOLLOW_DATE }?.title,
+                        dayRule?.takeIf { it.type == CalendarRuleType.FOLLOW_DATE }?.let {
+                            "${it.title} · 按 ${it.sourceDate} 课表"
+                        },
                         exception?.note?.takeIf(String::isNotBlank),
                     ).joinToString(" · "),
                 )
@@ -99,10 +112,19 @@ object ScheduleEngine {
     fun currentOrNext(state: AppState, now: LocalDateTime = LocalDateTime.now()): ScheduledClass? =
         upcoming(state, now).firstOrNull()
 
-    fun dayRule(state: AppState, date: LocalDate): CalendarDayRule? {
+    fun dayRule(state: AppState, date: LocalDate): ResolvedCalendarDayRule? {
         val profile = state.preferences.holidaySync
         if (!profile.enabled) return null
-        return state.calendarDayRules.find { it.date == date.toString() && it.sourceUrl == profile.sourceUrl }
+        val baseRule = state.calendarDayRules.find { it.date == date.toString() && it.sourceUrl == profile.sourceUrl }
+            ?: return null
+        val override = state.calendarDayOverrides.find { it.date == date.toString() }
+            ?.takeIf { baseRule.type != CalendarRuleType.NO_CLASS }
+        return ResolvedCalendarDayRule(
+            baseRule = baseRule,
+            type = if (override != null) CalendarRuleType.FOLLOW_DATE else baseRule.type,
+            sourceDate = override?.sourceDate ?: baseRule.sourceDate,
+            isUserOverride = override != null,
+        )
     }
 
     fun nextEarlyClass(

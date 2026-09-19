@@ -196,6 +196,7 @@ fun CourseTraceApp(viewModel: MainViewModel) {
                                 onAddCourse = { showAddCourse = true },
                                 onCourseClick = { selectedCourse = it },
                                 onStartSession = viewModel::startSession,
+                                onSetCalendarDayOverride = viewModel::setCalendarDayOverride,
                             )
                             MainSection.SCHEDULE -> ScheduleScreen(
                                 state = appState,
@@ -204,6 +205,7 @@ fun CourseTraceApp(viewModel: MainViewModel) {
                                 onCourseClick = { selectedCourse = it },
                                 onCommitImport = viewModel::commitImport,
                                 onManageTerms = { showTermManager = true },
+                                onSetCalendarDayOverride = viewModel::setCalendarDayOverride,
                             )
                             MainSection.PROJECTS -> ProjectsScreen(
                                 state = appState,
