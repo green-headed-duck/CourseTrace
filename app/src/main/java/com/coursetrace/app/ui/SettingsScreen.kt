@@ -14,10 +14,12 @@ import android.provider.Settings
 import android.provider.MediaStore
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -32,6 +34,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.filled.CheckCircle
@@ -62,6 +65,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -74,6 +78,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -83,6 +88,7 @@ import com.coursetrace.app.model.AppState
 import com.coursetrace.app.model.ScheduleTimeProfile
 import com.coursetrace.app.model.ThemeMode
 import com.coursetrace.app.BuildConfig
+import com.coursetrace.app.domain.AppearancePolicy
 
 @Composable
 fun SettingsScreen(
@@ -99,6 +105,8 @@ fun SettingsScreen(
     onCheckUpdate: () -> Unit,
     onExportBackup: () -> Unit,
     onRestoreBackup: () -> Unit,
+    onChooseBackground: () -> Unit,
+    onRemoveBackground: () -> Unit,
 ) {
     val context = LocalContext.current
     var showApiDialog by remember { mutableStateOf(false) }
@@ -106,6 +114,7 @@ fun SettingsScreen(
     var showUpdateDialog by remember { mutableStateOf(false) }
     var showTimeProfileDialog by remember { mutableStateOf(false) }
     var showSupportDialog by remember { mutableStateOf(false) }
+    var showThemeColorDialog by remember { mutableStateOf(false) }
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp, 22.dp, 20.dp, 120.dp),
@@ -141,10 +150,95 @@ fun SettingsScreen(
                 }
                 SettingSwitch(
                     title = "系统动态配色",
-                    subtitle = "Android 12 及以上使用壁纸色彩",
+                    subtitle = "Android 12 及以上使用系统壁纸色；开启时优先于自定义颜色",
                     checked = state.preferences.dynamicColor,
                     onChecked = { enabled -> onUpdatePreferences { it.copy(dynamicColor = enabled) } },
                 )
+                HorizontalDivider(Modifier.padding(vertical = 10.dp))
+                Text("主题颜色", fontWeight = FontWeight.SemiBold)
+                Text(
+                    if (state.preferences.dynamicColor) "当前跟随系统；选择颜色后会关闭动态配色"
+                    else "按钮、强调信息和容器颜色会同步变化",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    THEME_COLOR_PRESETS.forEach { preset ->
+                        val selected = !state.preferences.dynamicColor && state.preferences.themeSeedArgb == preset.seedArgb
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Surface(
+                                onClick = {
+                                    onUpdatePreferences {
+                                        it.copy(dynamicColor = false, themeSeedArgb = preset.seedArgb)
+                                    }
+                                },
+                                modifier = Modifier.size(44.dp),
+                                shape = CircleShape,
+                                color = Color(preset.previewArgb.toInt()),
+                                border = if (selected) BorderStroke(3.dp, MaterialTheme.colorScheme.onSurface) else null,
+                            ) {}
+                            Spacer(Modifier.height(4.dp))
+                            Text(preset.label, style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Surface(
+                            onClick = { showThemeColorDialog = true },
+                            modifier = Modifier.size(44.dp),
+                            shape = CircleShape,
+                            color = state.preferences.themeSeedArgb?.let { Color(it.toInt()) }
+                                ?: MaterialTheme.colorScheme.surfaceVariant,
+                            border = if (
+                                !state.preferences.dynamicColor &&
+                                state.preferences.themeSeedArgb != null &&
+                                THEME_COLOR_PRESETS.none { it.seedArgb == state.preferences.themeSeedArgb }
+                            ) {
+                                BorderStroke(3.dp, MaterialTheme.colorScheme.onSurface)
+                            } else null,
+                        ) {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Text("+", style = MaterialTheme.typography.titleLarge)
+                            }
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text("自定义", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+                HorizontalDivider(Modifier.padding(vertical = 10.dp))
+                Text("应用背景", fontWeight = FontWeight.SemiBold)
+                Text(
+                    if (state.preferences.backgroundImageUri.isBlank()) "当前使用主题纯色背景"
+                    else "已使用自定义照片；照片只由课迹在本机读取，不会上传",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onChooseBackground, modifier = Modifier.weight(1f)) {
+                        Text(if (state.preferences.backgroundImageUri.isBlank()) "选择照片" else "更换照片")
+                    }
+                    if (state.preferences.backgroundImageUri.isNotBlank()) {
+                        TextButton(onClick = onRemoveBackground) { Text("移除") }
+                    }
+                }
+                AnimatedVisibility(state.preferences.backgroundImageUri.isNotBlank()) {
+                    Column {
+                        Spacer(Modifier.height(8.dp))
+                        Text("照片显示程度", style = MaterialTheme.typography.labelLarge)
+                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            BACKGROUND_OVERLAY_OPTIONS.forEach { option ->
+                                FilterChip(
+                                    selected = kotlin.math.abs(state.preferences.backgroundOverlayAlpha - option.alpha) < 0.01f,
+                                    onClick = {
+                                        onUpdatePreferences { it.copy(backgroundOverlayAlpha = option.alpha) }
+                                    },
+                                    label = { Text(option.label) },
+                                )
+                            }
+                        }
+                    }
+                }
                 SettingSwitch(
                     title = "减少动画",
                     subtitle = "减少大幅位移，保留必要状态反馈",
@@ -426,9 +520,84 @@ fun SettingsScreen(
             onSaveImage = { saveSupportCodeToGallery(context) },
         )
     }
+    if (showThemeColorDialog) {
+        ThemeColorDialog(
+            initialArgb = state.preferences.themeSeedArgb ?: DEFAULT_THEME_SEED,
+            onDismiss = { showThemeColorDialog = false },
+            onConfirm = { argb ->
+                onUpdatePreferences { it.copy(dynamicColor = false, themeSeedArgb = argb) }
+                showThemeColorDialog = false
+            },
+        )
+    }
 }
 
 private const val COURSETRACE_GITHUB_URL = "https://github.com/green-headed-duck/CourseTrace"
+private const val DEFAULT_THEME_SEED = 0xFF4F46E5L
+
+private data class ThemeColorPreset(val label: String, val seedArgb: Long?, val previewArgb: Long)
+private data class BackgroundOverlayOption(val label: String, val alpha: Float)
+
+private val THEME_COLOR_PRESETS = listOf(
+    ThemeColorPreset("默认", null, DEFAULT_THEME_SEED),
+    ThemeColorPreset("海蓝", 0xFF1565C0L, 0xFF1565C0L),
+    ThemeColorPreset("青绿", 0xFF00796BL, 0xFF00796BL),
+    ThemeColorPreset("紫罗兰", 0xFF7E57C2L, 0xFF7E57C2L),
+    ThemeColorPreset("玫红", 0xFFC2185BL, 0xFFC2185BL),
+    ThemeColorPreset("暖橙", 0xFFE65100L, 0xFFE65100L),
+)
+
+private val BACKGROUND_OVERLAY_OPTIONS = listOf(
+    BackgroundOverlayOption("清晰", 0.45f),
+    BackgroundOverlayOption("平衡", 0.68f),
+    BackgroundOverlayOption("柔和", 0.84f),
+)
+
+@Composable
+private fun ThemeColorDialog(
+    initialArgb: Long,
+    onDismiss: () -> Unit,
+    onConfirm: (Long) -> Unit,
+) {
+    var value by remember(initialArgb) { mutableStateOf(AppearancePolicy.formatHexColor(initialArgb)) }
+    val parsed = AppearancePolicy.parseHexColor(value)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("自定义主题颜色") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    "输入 6 位十六进制颜色。课迹会自动生成适合浅色与深色模式的配色。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Surface(
+                        modifier = Modifier.size(48.dp),
+                        shape = CircleShape,
+                        color = parsed?.let { Color(it.toInt()) } ?: MaterialTheme.colorScheme.errorContainer,
+                    ) {}
+                    OutlinedTextField(
+                        value = value,
+                        onValueChange = { input -> value = input.take(7) },
+                        label = { Text("颜色") },
+                        placeholder = { Text("#4F46E5") },
+                        isError = value.isNotBlank() && parsed == null,
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                if (parsed == null) {
+                    Text("请输入类似 #4F46E5 的颜色值", color = MaterialTheme.colorScheme.error)
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = { parsed?.let(onConfirm) }, enabled = parsed != null) { Text("应用") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+}
 
 @Composable
 private fun SupportDeveloperDialog(

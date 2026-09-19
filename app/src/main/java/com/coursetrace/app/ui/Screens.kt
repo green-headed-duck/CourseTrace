@@ -319,6 +319,7 @@ fun ScheduleScreen(
     val monday = selectedDate.minusDays((selectedDate.dayOfWeek.value - 1).toLong())
     val classes = ScheduleEngine.classesOn(state, selectedDate)
     Scaffold(
+        containerColor = Color.Transparent,
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = onAddCourse,

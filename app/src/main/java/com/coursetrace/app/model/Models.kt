@@ -180,6 +180,9 @@ fun scutInternationalPeriods(): List<PeriodTime> = listOf(
 data class AppPreferences(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val dynamicColor: Boolean = true,
+    val themeSeedArgb: Long? = null,
+    val backgroundImageUri: String = "",
+    val backgroundOverlayAlpha: Float = 0.78f,
     val reduceMotion: Boolean = false,
     val notificationLeadMinutes: Int = 15,
     val hideSensitiveOnLockScreen: Boolean = true,

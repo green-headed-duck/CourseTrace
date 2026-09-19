@@ -45,6 +45,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -99,6 +100,23 @@ fun CourseTraceApp(viewModel: MainViewModel) {
         }
         pendingMaterialOwner = null
     }
+    val backgroundPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let { selected ->
+            val previous = appState.preferences.backgroundImageUri
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(selected, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            viewModel.updatePreferences { it.copy(backgroundImageUri = selected.toString()) }
+            if (previous.isNotBlank() && previous != selected.toString()) {
+                runCatching {
+                    context.contentResolver.releasePersistableUriPermission(
+                        android.net.Uri.parse(previous),
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                    )
+                }
+            }
+        }
+    }
     val backupPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
         val password = pendingBackupPassword
         if (uri != null && password != null) viewModel.exportEncryptedBackup(uri, password)
@@ -131,10 +149,11 @@ fun CourseTraceApp(viewModel: MainViewModel) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= 720.dp
         Scaffold(
+            containerColor = Color.Transparent,
             snackbarHost = { SnackbarHost(snackbarHost) },
             bottomBar = {
                 if (!wide) {
-                    NavigationBar {
+                    NavigationBar(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)) {
                         MainSection.entries.forEach { item ->
                             NavigationBarItem(
                                 selected = section == item,
@@ -149,7 +168,7 @@ fun CourseTraceApp(viewModel: MainViewModel) {
         ) { padding ->
             Row(Modifier.fillMaxSize().padding(padding)) {
                 if (wide) {
-                    NavigationRail(containerColor = MaterialTheme.colorScheme.surface) {
+                    NavigationRail(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)) {
                         MainSection.entries.forEach { item ->
                             NavigationRailItem(
                                 selected = section == item,
@@ -214,6 +233,19 @@ fun CourseTraceApp(viewModel: MainViewModel) {
                                 onCheckUpdate = viewModel::checkForUpdates,
                                 onExportBackup = { showBackupDialog = true },
                                 onRestoreBackup = { showRestoreDialog = true },
+                                onChooseBackground = { backgroundPicker.launch(arrayOf("image/*")) },
+                                onRemoveBackground = {
+                                    val previous = appState.preferences.backgroundImageUri
+                                    viewModel.updatePreferences { it.copy(backgroundImageUri = "") }
+                                    if (previous.isNotBlank()) {
+                                        runCatching {
+                                            context.contentResolver.releasePersistableUriPermission(
+                                                android.net.Uri.parse(previous),
+                                                Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                                            )
+                                        }
+                                    }
+                                },
                             )
                         }
                     }

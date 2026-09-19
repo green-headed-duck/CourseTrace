@@ -16,6 +16,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.flow.MutableStateFlow
 import com.coursetrace.app.ui.CourseTraceApp
+import com.coursetrace.app.ui.theme.CourseTraceBackground
 import com.coursetrace.app.ui.theme.CourseTraceTheme
 
 class MainActivity : FragmentActivity() {
@@ -35,10 +36,16 @@ class MainActivity : FragmentActivity() {
             CourseTraceTheme(
                 mode = state.preferences.themeMode,
                 dynamicColor = state.preferences.dynamicColor,
+                seedArgb = state.preferences.themeSeedArgb,
             ) {
-                val isUnlocked = unlocked.collectAsStateWithLifecycle().value
-                if (isUnlocked) CourseTraceApp(viewModel)
-                else com.coursetrace.app.ui.LockedScreen(onUnlock = ::authenticate)
+                CourseTraceBackground(
+                    imageUri = state.preferences.backgroundImageUri,
+                    overlayAlpha = state.preferences.backgroundOverlayAlpha,
+                ) {
+                    val isUnlocked = unlocked.collectAsStateWithLifecycle().value
+                    if (isUnlocked) CourseTraceApp(viewModel)
+                    else com.coursetrace.app.ui.LockedScreen(onUnlock = ::authenticate)
+                }
             }
         }
         if (

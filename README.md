@@ -6,7 +6,7 @@
 
 ## 已实现
 
-- Kotlin + Jetpack Compose Material 3；系统深浅色、动态配色、横竖屏和宽屏自适应。
+- Kotlin + Jetpack Compose Material 3；系统深浅色、动态/自定义主题色、自定义照片背景、横竖屏和宽屏自适应。
 - 多学期、单双周/指定周、课程时间与教室；PDF 识别草稿必须预览后才写入。
 - 华南理工大学大学城/国际校区第 1—11 节作息模板；PDF 只有“第几节”时自动换算准确时间。
 - 今日、周总览、课程编辑/移出课表，以及“下一节课”桌面组件。
@@ -71,8 +71,8 @@ ChatGPT 无法被动读取其他历史会话。只有 Skill 活跃时追加或�
 ```powershell
 .\tools\sign-update-manifest.ps1 `
   -ApkPath .\app\build\outputs\apk\release\app-release.apk `
-  -VersionCode 12 -VersionName 0.2.8 `
-  -ApkUrl https://你的域名/downloads/coursetrace-0.2.8.apk
+  -VersionCode 13 -VersionName 0.2.9 `
+  -ApkUrl https://你的域名/downloads/coursetrace-0.2.9.apk
 ```
 
 把 APK 与生成的 `update-manifest.json` 放到 HTTPS 站点，在应用“更新设置”中填写清单地址。后续版本必须沿用同一 Android keystore 和更新清单私钥。
@@ -83,4 +83,4 @@ ChatGPT 无法被动读取其他历史会话。只有 Skill 活跃时追加或�
 
 ## 当前验证版本
 
-`0.2.8`（versionCode 12）重做学期设置：当前学期摘要、教学周校准、学期编辑、切换、新建和归档恢复采用分层界面；学期变更后会同步重排提醒，旧版迁移也不会再覆盖用户手动设置。中转站课表导入继续使用单任务互斥、PDF 指纹去重和只写入当前学期的安全规则。2026-2027 学年第 1 学期起点为 `2026-08-31`，因此 `2026-09-18` 为第 3 教学周。
+`0.2.9`（versionCode 13）增加全局自定义照片背景、三档背景显示程度、六套主题色与十六进制自定义颜色；照片通过系统文件选择器持续授权并按屏幕尺寸解码，不申请存储权限。自定义配色同时适配浅色与深色模式，也可随时恢复 Android 动态配色。学期设置继续保留 0.2.8 的分层管理、校准与归档恢复能力。
