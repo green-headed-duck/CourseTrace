@@ -8,12 +8,8 @@
 
 <table>
   <tr>
-    <td align="center"><img src="docs/images/today.png" width="260" alt="今日页"><br><sub>今日课程与快捷操作</sub></td>
-    <td align="center"><img src="docs/images/schedule-week.png" width="260" alt="周总览"><br><sub>周总览与课程安排</sub></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="docs/images/workday-mapping.png" width="260" alt="调休课表映射"><br><sub>调休 A→B 课表快捷映射</sub></td>
-    <td align="center"><img src="docs/images/settings.png" width="260" alt="外观设置"><br><sub>主题色与自定义背景</sub></td>
+    <td align="center"><img src="docs/images/today.png" width="460" alt="今日页"><br><sub>今日课程与快捷操作</sub></td>
+    <td align="center"><img src="docs/images/settings.png" width="460" alt="设置页"><br><sub>主题、提醒与本地设置</sub></td>
   </tr>
 </table>
 
