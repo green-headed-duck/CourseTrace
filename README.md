@@ -26,6 +26,7 @@
 - 默认自动应用国家法定节假日：放假日停止排课，调休工作日明确标注；调休日可快捷选择“将 A 日改为 B 日课表”，本地选择不会被联网同步覆盖。支持更换可信的 HTTPS JSON 来源，数据源也可用 `FOLLOW_DATE` 明确指定。
 - OpenAI 兼容中转接口，默认配置 `https://api.apiyi.com/v1` / `gpt-5.6-luna`；模型名可单独编辑，Key 仅存 Android Keystore。
 - ChatGPT Mobile 系统分享与课堂 JSON 专用导入；摘要、问题、错题、痛点、进度、结论和原文分别归档，不必猜测粘贴框。另有为未来/兼容工作区准备的自托管 CourseTrace MCP 中继；ChatGPT Pro 推理与 PDF API 中转互不混用。
+- 与“词迹 CETTrace”通过 Android 只读数据桥无感联动：只共享当天课程的开始与结束时间，用于自动避让；不共享课程名、教师、教室或课堂记录。调用方必须同时匹配固定包名和签名证书。
 - 上课前默认 15 分钟本地提醒、Android 16 临近/上课实时更新样式、点通知直达对应课程；精确提醒无权限时自动降级。
 - 早课系统闹钟开关与显式设置操作；最终行为由系统时钟应用确认。
 - 课程和 FPGA 等自学项目的资料、课堂原文、错题、痛点、进度与下次资料预测。
@@ -55,6 +56,7 @@ $env:JAVA_HOME = '你的 JDK 17 路径'
 4. 在课程详情中归档课件；文件仍由系统文档提供器管理，课迹只保留持续授权的 URI 和校验值。
 5. 个人 Pro 手机端使用“复制课堂指令 → 在 ChatGPT 聊天 → 下课时复制 JSON → 课程记录页的‘粘贴 ChatGPT JSON’”。JSON 不要粘入手动过程、摘要或普通原文框。也可直接通过系统分享把普通聊天原文送回课迹；这些路径不需要 OpenAI API。
 6. “设置 → 关于与支持 → GitHub”可直达源码、历史版本下载和问题反馈页面。
+7. 如词迹早于课迹 0.3.3 安装，Android 可能尚未授予后来才出现的桥接权限；用同一签名的词迹安装包执行一次覆盖更新即可，不要卸载或清除数据。之后正常更新无需重复操作。
 
 ## ChatGPT 联动与当前限制
 
@@ -85,8 +87,8 @@ ChatGPT 无法被动读取其他历史会话。只有 Skill 活跃时追加或�
 ```powershell
 .\tools\sign-update-manifest.ps1 `
   -ApkPath .\app\build\outputs\apk\release\app-release.apk `
-  -VersionCode 16 -VersionName 0.3.2 `
-  -ApkUrl https://github.com/green-headed-duck/CourseTrace/releases/download/v0.3.2/CourseTrace-0.3.2-release.apk
+  -VersionCode 17 -VersionName 0.3.3 `
+  -ApkUrl https://github.com/green-headed-duck/CourseTrace/releases/download/v0.3.3/CourseTrace-0.3.3-release.apk
 ```
 
 将生成的 `update-manifest.json` 提交到仓库 `main` 分支，并把 APK 上传到相应 GitHub Release。后续版本必须沿用同一 Android keystore 和更新清单私钥。设置页仍允许高级用户替换其他 HTTPS 签名清单。
@@ -97,4 +99,4 @@ ChatGPT 无法被动读取其他历史会话。只有 Skill 活跃时追加或�
 
 ## 当前验证版本
 
-`0.3.2`（versionCode 16）为调休工作日增加 A→B 课表快捷映射。可以从附近工作日快速选择或输入精确日期，课程、教室和单双周按 B 日判断，实际上课与提醒仍落在 A 日；本地覆盖不会被节假日联网同步清除。0.3.1 的免登录 GitHub 一键更新继续保留。
+`0.3.3`（versionCode 17）新增与词迹 CETTrace 的安全只读课程占用联动。课迹只返回经过节假日、调休、单双周、指定周和临时取消规则计算后的起止时间，并在本地课表变化后通知词迹自动刷新；0.3.2 的调休 A→B 映射与 0.3.1 的免登录 GitHub 一键更新继续保留。

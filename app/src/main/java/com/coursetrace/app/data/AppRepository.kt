@@ -1,6 +1,9 @@
 package com.coursetrace.app.data
 
 import android.content.Context
+import android.net.Uri
+import android.util.Log
+import com.coursetrace.app.bridge.StudyBridgeContract
 import com.coursetrace.app.model.AppPreferences
 import com.coursetrace.app.model.AppState
 import com.coursetrace.app.model.Course
@@ -117,6 +120,12 @@ class AppRepository(context: Context) {
         if (!tempFile.renameTo(stateFile)) error("无法保存本地记录")
         gitHistory.commit(message)
         NextClassWidgetProvider.updateAll(appContext, state)
+        runCatching {
+            appContext.contentResolver.notifyChange(
+                Uri.parse(StudyBridgeContract.BUSY_WINDOWS_URI_STRING),
+                null,
+            )
+        }.onFailure { Log.w("CourseTraceBridge", "Unable to notify study bridge observers", it) }
     }
 
     suspend fun updatePreferences(preferences: AppPreferences) =
