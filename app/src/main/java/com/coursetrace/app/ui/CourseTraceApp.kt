@@ -230,6 +230,8 @@ fun CourseTraceApp(viewModel: MainViewModel) {
                                 onSetEarlyAlarm = viewModel::setNextEarlyAlarm,
                                 onSaveChatGptLink = viewModel::saveChatGptLink,
                                 onSyncChatGpt = viewModel::syncChatGptNow,
+                                onSaveHolidaySync = viewModel::saveHolidaySync,
+                                onSyncHolidayCalendar = viewModel::syncHolidayCalendarNow,
                                 onCheckUpdate = viewModel::checkForUpdates,
                                 onExportBackup = { showBackupDialog = true },
                                 onRestoreBackup = { showRestoreDialog = true },

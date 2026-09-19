@@ -19,6 +19,12 @@ enum class LearningEventKind { TRANSCRIPT, QUESTION, PAIN_POINT, WRONG_ANSWER, P
 enum class ImportSource { API_RELAY, CHATGPT_MOBILE, MANUAL }
 
 @Serializable
+enum class CalendarRuleType { NO_CLASS, WORKDAY, FOLLOW_DATE }
+
+const val DEFAULT_HOLIDAY_FEED_URL: String =
+    "https://raw.githubusercontent.com/green-headed-duck/CourseTrace/main/calendar/china-holidays.json"
+
+@Serializable
 data class Term(
     val id: String = UUID.randomUUID().toString(),
     val name: String,
@@ -67,6 +73,19 @@ data class ScheduleException(
     val replacementEndTime: String? = null,
     val replacementRoom: String? = null,
     val note: String = "",
+)
+
+@Serializable
+data class CalendarDayRule(
+    val id: String,
+    val date: String,
+    val type: CalendarRuleType,
+    val title: String,
+    val sourceDate: String? = null,
+    val sourceUrl: String,
+    val sourceName: String,
+    val sourcePage: String = "",
+    val sourceUpdatedAt: String = "",
 )
 
 @Serializable
@@ -183,6 +202,7 @@ data class AppPreferences(
     val themeSeedArgb: Long? = null,
     val backgroundImageUri: String = "",
     val backgroundOverlayAlpha: Float = 0.78f,
+    val holidaySync: HolidaySyncProfile = HolidaySyncProfile(),
     val reduceMotion: Boolean = false,
     val notificationLeadMinutes: Int = 15,
     val hideSensitiveOnLockScreen: Boolean = true,
@@ -197,6 +217,16 @@ data class AppPreferences(
     val apiProfile: ApiProfile = ApiProfile(),
     val chatGptLink: ChatGptLinkProfile = ChatGptLinkProfile(),
     val scheduleTimeProfile: ScheduleTimeProfile = ScheduleTimeProfile(),
+)
+
+@Serializable
+data class HolidaySyncProfile(
+    val enabled: Boolean = true,
+    val sourceUrl: String = DEFAULT_HOLIDAY_FEED_URL,
+    val sourceName: String = "中国法定节假日",
+    val sourcePage: String = "https://www.gov.cn/zhengce/zhengceku/202511/content_7047091.htm",
+    val sourceUpdatedAt: String = "2025-11-04",
+    val lastSyncAt: String? = null,
 )
 
 @Serializable
@@ -247,6 +277,7 @@ data class AppState(
     val courses: List<Course> = emptyList(),
     val slots: List<CourseSlot> = emptyList(),
     val exceptions: List<ScheduleException> = emptyList(),
+    val calendarDayRules: List<CalendarDayRule> = emptyList(),
     val materials: List<MaterialItem> = emptyList(),
     val sessions: List<LearningSession> = emptyList(),
     val events: List<LearningEvent> = emptyList(),

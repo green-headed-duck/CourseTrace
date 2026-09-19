@@ -10,6 +10,7 @@
 - 多学期、单双周/指定周、课程时间与教室；PDF 识别草稿必须预览后才写入。
 - 华南理工大学大学城/国际校区第 1—11 节作息模板；PDF 只有“第几节”时自动换算准确时间。
 - 今日、周总览、课程编辑/移出课表，以及“下一节课”桌面组件。
+- 默认自动应用国家法定节假日：放假日停止排课，调休工作日明确标注；支持更换可信的 HTTPS JSON 来源。国家通知未指定学校补课映射时不会擅自猜测，数据源可用 `FOLLOW_DATE` 明确指定。
 - OpenAI 兼容中转接口，默认配置 `https://api.apiyi.com/v1` / `gpt-5.6-luna`；模型名可单独编辑，Key 仅存 Android Keystore。
 - ChatGPT Mobile 系统分享与课堂 JSON 专用导入；摘要、问题、错题、痛点、进度、结论和原文分别归档，不必猜测粘贴框。另有为未来/兼容工作区准备的自托管 CourseTrace MCP 中继；ChatGPT Pro 推理与 PDF API 中转互不混用。
 - 上课前默认 15 分钟本地提醒、Android 16 临近/上课实时更新样式、点通知直达对应课程；精确提醒无权限时自动降级。
@@ -71,8 +72,8 @@ ChatGPT 无法被动读取其他历史会话。只有 Skill 活跃时追加或�
 ```powershell
 .\tools\sign-update-manifest.ps1 `
   -ApkPath .\app\build\outputs\apk\release\app-release.apk `
-  -VersionCode 13 -VersionName 0.2.9 `
-  -ApkUrl https://你的域名/downloads/coursetrace-0.2.9.apk
+  -VersionCode 14 -VersionName 0.3.0 `
+  -ApkUrl https://你的域名/downloads/coursetrace-0.3.0.apk
 ```
 
 把 APK 与生成的 `update-manifest.json` 放到 HTTPS 站点，在应用“更新设置”中填写清单地址。后续版本必须沿用同一 Android keystore 和更新清单私钥。
@@ -83,4 +84,4 @@ ChatGPT 无法被动读取其他历史会话。只有 Skill 活跃时追加或�
 
 ## 当前验证版本
 
-`0.2.9`（versionCode 13）增加全局自定义照片背景、三档背景显示程度、六套主题色与十六进制自定义颜色；照片通过系统文件选择器持续授权并按屏幕尺寸解码，不申请存储权限。自定义配色同时适配浅色与深色模式，也可随时恢复 Android 动态配色。学期设置继续保留 0.2.8 的分层管理、校准与归档恢复能力。
+`0.3.0`（versionCode 14）默认开启国家法定节假日自动调整，内置 2026 年官方日期并支持离线生效。设置页可以替换可信的 HTTPS JSON 来源；放假自动停课，明确提供 `FOLLOW_DATE` 的来源可自动补课，普通调休工作日不会在缺少学校安排时擅自猜课。后台最多每 12 小时检查一次，并在规则变化后重新安排提醒。本版暂不接入学校校历。数据源格式见 [`calendar/README.md`](calendar/README.md)。

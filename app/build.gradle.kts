@@ -19,8 +19,8 @@ android {
         applicationId = "com.coursetrace.app"
         minSdk = 29
         targetSdk = 36
-        versionCode = 13
-        versionName = "0.2.9"
+        versionCode = 14
+        versionName = "0.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true

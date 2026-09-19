@@ -47,6 +47,7 @@ import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.EventRepeat
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.NotificationsActive
@@ -89,6 +90,7 @@ import com.coursetrace.app.model.ScheduleTimeProfile
 import com.coursetrace.app.model.ThemeMode
 import com.coursetrace.app.BuildConfig
 import com.coursetrace.app.domain.AppearancePolicy
+import com.coursetrace.app.model.DEFAULT_HOLIDAY_FEED_URL
 
 @Composable
 fun SettingsScreen(
@@ -102,6 +104,8 @@ fun SettingsScreen(
     onSetEarlyAlarm: () -> Unit,
     onSaveChatGptLink: (Boolean, String, String?) -> Unit,
     onSyncChatGpt: () -> Unit,
+    onSaveHolidaySync: (Boolean, String) -> Unit,
+    onSyncHolidayCalendar: () -> Unit,
     onCheckUpdate: () -> Unit,
     onExportBackup: () -> Unit,
     onRestoreBackup: () -> Unit,
@@ -115,6 +119,7 @@ fun SettingsScreen(
     var showTimeProfileDialog by remember { mutableStateOf(false) }
     var showSupportDialog by remember { mutableStateOf(false) }
     var showThemeColorDialog by remember { mutableStateOf(false) }
+    var showHolidaySourceDialog by remember { mutableStateOf(false) }
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(20.dp, 22.dp, 20.dp, 120.dp),
@@ -288,6 +293,51 @@ fun SettingsScreen(
                     onClick = { showTimeProfileDialog = true },
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text("查看第 1–11 节时间") }
+            }
+        }
+        item {
+            SettingsSection("国家节假日与调休", Icons.Outlined.EventRepeat) {
+                val profile = state.preferences.holidaySync
+                SettingSwitch(
+                    title = "自动应用国家节假日",
+                    subtitle = "默认开启；联网自动更新，放假日自动停止排课且无需确认",
+                    checked = profile.enabled,
+                    onChecked = { enabled -> onSaveHolidaySync(enabled, profile.sourceUrl) },
+                )
+                AnimatedVisibility(profile.enabled) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(profile.sourceName, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "已载入 ${state.calendarDayRules.count { it.sourceUrl == profile.sourceUrl }} 条日期规则" +
+                                (profile.lastSyncAt?.take(16)?.replace('T', ' ')?.let { " · 规则更新 $it" } ?: ""),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            "国家通知明确的放假日会自动移除课程；仅标为“上班”的周末不会猜测补哪天课程。数据源若提供 FOLLOW_DATE，课迹会自动按指定日期课表执行。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = { showHolidaySourceDialog = true }, modifier = Modifier.weight(1f)) {
+                                Text("更换数据源")
+                            }
+                            Button(onClick = onSyncHolidayCalendar, enabled = !busy, modifier = Modifier.weight(1f)) {
+                                Text(if (busy) "同步中…" else "立即同步")
+                            }
+                        }
+                        if (profile.sourcePage.startsWith("https://")) {
+                            TextButton(
+                                onClick = {
+                                    runCatching {
+                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(profile.sourcePage)))
+                                    }
+                                },
+                                modifier = Modifier.align(Alignment.End),
+                            ) { Text("查看原始通知") }
+                        }
+                    }
+                }
             }
         }
         item {
@@ -530,6 +580,16 @@ fun SettingsScreen(
             },
         )
     }
+    if (showHolidaySourceDialog) {
+        HolidaySourceDialog(
+            initialUrl = state.preferences.holidaySync.sourceUrl,
+            onDismiss = { showHolidaySourceDialog = false },
+            onSave = { url ->
+                onSaveHolidaySync(true, url)
+                showHolidaySourceDialog = false
+            },
+        )
+    }
 }
 
 private const val COURSETRACE_GITHUB_URL = "https://github.com/green-headed-duck/CourseTrace"
@@ -552,6 +612,47 @@ private val BACKGROUND_OVERLAY_OPTIONS = listOf(
     BackgroundOverlayOption("平衡", 0.68f),
     BackgroundOverlayOption("柔和", 0.84f),
 )
+
+@Composable
+private fun HolidaySourceDialog(
+    initialUrl: String,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit,
+) {
+    var url by remember(initialUrl) { mutableStateOf(initialUrl) }
+    val valid = url.trim().startsWith("https://")
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("节假日数据源") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "课迹会信任并自动应用该地址返回的 JSON 规则。请只填写你信任的 HTTPS 来源。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedTextField(
+                    value = url,
+                    onValueChange = { url = it },
+                    label = { Text("HTTPS JSON 地址") },
+                    isError = url.isNotBlank() && !valid,
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedButton(onClick = { url = DEFAULT_HOLIDAY_FEED_URL }, modifier = Modifier.fillMaxWidth()) {
+                    Text("恢复默认国家节假日源")
+                }
+                Text(
+                    "当前暂不接入学校校历。自定义源最多 500 条、1 MB，只能声明放假、调休工作日或按指定日期课表上课。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = { Button(onClick = { onSave(url.trim()) }, enabled = valid) { Text("保存并同步") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
+    )
+}
 
 @Composable
 private fun ThemeColorDialog(

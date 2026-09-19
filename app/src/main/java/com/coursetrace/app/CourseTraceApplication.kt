@@ -8,6 +8,8 @@ import com.coursetrace.app.data.PdfImportService
 import com.coursetrace.app.data.SecureSettings
 import com.coursetrace.app.notifications.NotificationScheduler
 import com.coursetrace.app.data.RelaySyncScheduler
+import com.coursetrace.app.data.HolidayCalendarSyncScheduler
+import com.coursetrace.app.data.HolidayCalendarSyncService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -38,12 +40,19 @@ class CourseTraceApplication : Application() {
         runStartupStage("relay-scheduler") {
             RelaySyncScheduler.update(this, repository.state.value.preferences.chatGptLink.enabled)
         }
+        runStartupStage("holiday-calendar-scheduler") {
+            HolidayCalendarSyncScheduler.update(this, repository.state.value.preferences.holidaySync.enabled)
+        }
         runStartupStage("next-class-widget") {
             NextClassWidgetProvider.updateAll(this, repository.state.value)
         }
         applicationScope.launch {
             runStartupStage("course-reminders") {
                 NotificationScheduler(this@CourseTraceApplication).reschedule(repository.state.value)
+            }
+            if (repository.state.value.preferences.holidaySync.enabled) {
+                HolidayCalendarSyncService(this@CourseTraceApplication, repository).sync(force = false)
+                    .onFailure { Log.w("CourseTraceStartup", "holiday calendar sync deferred", it) }
             }
         }
     }

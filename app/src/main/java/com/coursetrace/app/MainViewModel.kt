@@ -11,6 +11,9 @@ import com.coursetrace.app.data.PdfImportService
 import com.coursetrace.app.data.TimetablePayloadParser
 import com.coursetrace.app.data.RelaySyncScheduler
 import com.coursetrace.app.data.RelaySyncService
+import com.coursetrace.app.data.HolidayCalendarFeedParser
+import com.coursetrace.app.data.HolidayCalendarSyncScheduler
+import com.coursetrace.app.data.HolidayCalendarSyncService
 import com.coursetrace.app.domain.ScheduleEngine
 import com.coursetrace.app.domain.AcademicTermPolicy
 import com.coursetrace.app.model.ApiProfile
@@ -27,6 +30,8 @@ import com.coursetrace.app.model.MaterialKind
 import com.coursetrace.app.model.StudyProject
 import com.coursetrace.app.model.Term
 import com.coursetrace.app.model.WeekPattern
+import com.coursetrace.app.model.DEFAULT_HOLIDAY_FEED_URL
+import com.coursetrace.app.domain.HolidayCalendarPolicy
 import com.coursetrace.app.notifications.EarlyAlarmService
 import com.coursetrace.app.notifications.NotificationScheduler
 import com.coursetrace.app.update.UpdateCheckResult
@@ -118,6 +123,43 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _workStatus.value = WorkStatus(busy = true, message = "正在与 ChatGPT 中继同步…")
             RelaySyncService(app.repository, app.secureSettings).sync().fold(
                 onSuccess = { _workStatus.value = WorkStatus(message = "同步完成，收到 $it 条新记录") },
+                onFailure = ::showError,
+            )
+        }
+    }
+
+    fun saveHolidaySync(enabled: Boolean, sourceUrl: String) {
+        viewModelScope.launch {
+            runCatching {
+                val normalizedUrl = sourceUrl.trim()
+                if (enabled) HolidayCalendarFeedParser.requireHttps(normalizedUrl)
+                val current = appState.value.preferences.holidaySync
+                val restoredDefault = normalizedUrl == DEFAULT_HOLIDAY_FEED_URL
+                val next = current.copy(
+                    enabled = enabled,
+                    sourceUrl = normalizedUrl,
+                    sourceName = if (restoredDefault) "中国法定节假日" else "自定义节假日源（待同步）",
+                    sourcePage = if (restoredDefault) HolidayCalendarPolicy.OFFICIAL_2026_PAGE else "",
+                    sourceUpdatedAt = if (restoredDefault) HolidayCalendarPolicy.OFFICIAL_2026_UPDATED_AT else "",
+                    lastSyncAt = if (current.sourceUrl == normalizedUrl) current.lastSyncAt else null,
+                )
+                app.repository.updateHolidaySyncProfile(next)
+                HolidayCalendarSyncScheduler.update(app, enabled)
+                NotificationScheduler(app).reschedule(app.repository.state.value)
+            }.onSuccess {
+                if (enabled) syncHolidayCalendarNow()
+                else _workStatus.value = WorkStatus(message = "国家节假日自动调整已关闭")
+            }.onFailure(::showError)
+        }
+    }
+
+    fun syncHolidayCalendarNow() {
+        viewModelScope.launch {
+            _workStatus.value = WorkStatus(busy = true, message = "正在同步国家节假日安排…")
+            HolidayCalendarSyncService(app, app.repository).sync().fold(
+                onSuccess = { count ->
+                    _workStatus.value = WorkStatus(message = "节假日同步完成，共 $count 条日期规则")
+                },
                 onFailure = ::showError,
             )
         }

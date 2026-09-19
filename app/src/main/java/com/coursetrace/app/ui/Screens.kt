@@ -44,6 +44,7 @@ import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Class
 import androidx.compose.material.icons.outlined.CloudDone
 import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.EventRepeat
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.School
 import androidx.compose.material.icons.outlined.Verified
@@ -81,6 +82,8 @@ import androidx.compose.ui.unit.dp
 import com.coursetrace.app.domain.ScheduleEngine
 import com.coursetrace.app.domain.ScheduledClass
 import com.coursetrace.app.model.AppState
+import com.coursetrace.app.model.CalendarDayRule
+import com.coursetrace.app.model.CalendarRuleType
 import com.coursetrace.app.model.Course
 import com.coursetrace.app.model.ImportDraft
 import com.coursetrace.app.model.LearningSession
@@ -125,6 +128,9 @@ fun TodayScreen(
                     Icon(Icons.Outlined.School, null, Modifier.padding(12.dp), tint = MaterialTheme.colorScheme.primary)
                 }
             }
+        }
+        ScheduleEngine.dayRule(state, today)?.let { rule ->
+            item { CalendarRuleBanner(rule) }
         }
         item {
             if (next != null) {
@@ -408,6 +414,9 @@ fun ScheduleScreen(
                         }
                     }
                 }
+                ScheduleEngine.dayRule(state, selectedDate)?.let { rule ->
+                    item { CalendarRuleBanner(rule) }
+                }
             }
             items(state.importDrafts, key = { it.id }) { draft ->
                 ImportDraftCard(draft, onCommitImport)
@@ -444,6 +453,7 @@ private fun WeeklyOverview(
         repeat(7) { offset ->
             val day = monday.plusDays(offset.toLong())
             val classes = ScheduleEngine.classesOn(state, day)
+            val dayRule = ScheduleEngine.dayRule(state, day)
             Column(Modifier.width(148.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Surface(
                     onClick = { onOpenDay(day) },
@@ -454,6 +464,17 @@ private fun WeeklyOverview(
                     Column(Modifier.fillMaxWidth().padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(ScheduleEngine.dayLabel(day.dayOfWeek.value), fontWeight = FontWeight.SemiBold)
                         Text(day.format(DateTimeFormatter.ofPattern("M/d")), style = MaterialTheme.typography.bodySmall)
+                        dayRule?.let {
+                            Text(
+                                when (it.type) {
+                                    CalendarRuleType.NO_CLASS -> "放假"
+                                    CalendarRuleType.WORKDAY -> "调休上班"
+                                    CalendarRuleType.FOLLOW_DATE -> "补课"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
                     }
                 }
                 if (classes.isEmpty()) {
@@ -493,6 +514,30 @@ private fun WeeklyOverview(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CalendarRuleBanner(rule: CalendarDayRule) {
+    val detail = when (rule.type) {
+        CalendarRuleType.NO_CLASS -> "当天课程已按国家节假日自动暂停"
+        CalendarRuleType.WORKDAY -> "国家调休工作日；当前来源未指定补哪天课程"
+        CalendarRuleType.FOLLOW_DATE -> "自动按照 ${rule.sourceDate} 的课表上课"
+    }
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+    ) {
+        Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Outlined.EventRepeat, null)
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(rule.title, fontWeight = FontWeight.SemiBold)
+                Text(detail, style = MaterialTheme.typography.bodySmall)
+                Text(rule.sourceName, style = MaterialTheme.typography.labelSmall)
             }
         }
     }

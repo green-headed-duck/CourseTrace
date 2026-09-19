@@ -14,6 +14,9 @@ import com.coursetrace.app.model.NextMaterialPrediction
 import com.coursetrace.app.model.StudyProject
 import com.coursetrace.app.model.Term
 import com.coursetrace.app.domain.AcademicTermPolicy
+import com.coursetrace.app.domain.HolidayCalendarPolicy
+import com.coursetrace.app.model.CalendarDayRule
+import com.coursetrace.app.model.HolidaySyncProfile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -49,7 +52,7 @@ class AppRepository(context: Context) {
         ignoreUnknownKeys = true
         encodeDefaults = true
     }
-    private var repairedTermOnLoad = false
+    private var migratedStateOnLoad = false
     val gitHistory by lazy(LazyThreadSafetyMode.SYNCHRONIZED) { GitHistoryService(recordsDir) }
 
     private val _state = MutableStateFlow(load())
@@ -61,9 +64,9 @@ class AppRepository(context: Context) {
                 runCatching {
                     when {
                         !stateFile.exists() -> persist(_state.value, "初始化课迹本地仓库")
-                        repairedTermOnLoad -> {
-                            persist(_state.value, "修复学期教学周起点")
-                            repairedTermOnLoad = false
+                        migratedStateOnLoad -> {
+                            persist(_state.value, "升级本地数据与节假日规则")
+                            migratedStateOnLoad = false
                         }
                     }
                 }
@@ -73,18 +76,20 @@ class AppRepository(context: Context) {
 
     private fun defaultState(): AppState {
         val term = AcademicTermPolicy.defaultTerm()
-        return AppState(
+        return HolidayCalendarPolicy.withBundledDefaults(AppState(
             schemaVersion = AcademicTermPolicy.currentSchemaVersion,
             terms = listOf(term),
             activeTermId = term.id,
-        )
+        ))
     }
 
     private fun load(): AppState = runCatching {
         if (!stateFile.exists()) return@runCatching defaultState()
         val decoded = json.decodeFromString<AppState>(stateFile.readText())
-        AcademicTermPolicy.repairKnown2026Term(decoded).also { repaired ->
-            repairedTermOnLoad = repaired != decoded
+        HolidayCalendarPolicy.withBundledDefaults(
+            AcademicTermPolicy.repairKnown2026Term(decoded),
+        ).also { migrated ->
+            migratedStateOnLoad = migrated != decoded
         }
     }.getOrElse { defaultState() }
 
@@ -93,9 +98,9 @@ class AppRepository(context: Context) {
         _state.value = restored
         persist(
             restored,
-            if (repairedTermOnLoad) "从加密备份恢复并修复学期教学周起点" else "从加密备份恢复",
+            if (migratedStateOnLoad) "从加密备份恢复并升级本地数据" else "从加密备份恢复",
         )
-        repairedTermOnLoad = false
+        migratedStateOnLoad = false
     }
 
     suspend fun update(message: String, transform: (AppState) -> AppState) = mutex.withLock {
@@ -115,6 +120,27 @@ class AppRepository(context: Context) {
 
     suspend fun updatePreferences(preferences: AppPreferences) =
         update("更新应用设置") { it.copy(preferences = preferences) }
+
+    suspend fun updateHolidaySyncProfile(profile: HolidaySyncProfile) =
+        update("更新节假日数据源") { state ->
+            val sourceChanged = state.preferences.holidaySync.sourceUrl != profile.sourceUrl
+            HolidayCalendarPolicy.withBundledDefaults(
+                state.copy(
+                    preferences = state.preferences.copy(holidaySync = profile),
+                    calendarDayRules = if (sourceChanged) emptyList() else state.calendarDayRules,
+                ),
+            )
+        }
+
+    suspend fun replaceCalendarDayRules(rules: List<CalendarDayRule>, profile: HolidaySyncProfile) =
+        update("同步节假日调休：${profile.sourceName}") { state ->
+            require(state.preferences.holidaySync.enabled) { "节假日自动同步已关闭" }
+            require(state.preferences.holidaySync.sourceUrl == profile.sourceUrl) { "节假日数据源已更改，请重新同步" }
+            state.copy(
+                calendarDayRules = rules,
+                preferences = state.preferences.copy(holidaySync = profile),
+            )
+        }
 
     suspend fun addTerm(term: Term, makeActive: Boolean = true) =
         update("新增学期：${term.name}") {

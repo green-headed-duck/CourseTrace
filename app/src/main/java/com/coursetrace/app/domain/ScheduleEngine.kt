@@ -3,6 +3,8 @@ package com.coursetrace.app.domain
 import com.coursetrace.app.model.AppState
 import com.coursetrace.app.model.Course
 import com.coursetrace.app.model.CourseSlot
+import com.coursetrace.app.model.CalendarDayRule
+import com.coursetrace.app.model.CalendarRuleType
 import com.coursetrace.app.model.Term
 import com.coursetrace.app.model.WeekPattern
 import java.time.DayOfWeek
@@ -28,22 +30,31 @@ object ScheduleEngine {
     }
 
     fun classesOn(state: AppState, date: LocalDate): List<ScheduledClass> {
+        val dayRule = dayRule(state, date)
+        if (dayRule?.type == CalendarRuleType.NO_CLASS) return emptyList()
+        val scheduleDate = if (dayRule?.type == CalendarRuleType.FOLLOW_DATE) {
+            dayRule.sourceDate?.let(LocalDate::parse) ?: date
+        } else {
+            date
+        }
         val term = state.activeTermId?.let { id -> state.terms.find { it.id == id } }
             ?: state.terms.firstOrNull { !it.archived }
             ?: return emptyList()
-        val week = weekNumber(term, date)
-        if (week !in 1..term.weekCount) return emptyList()
+        val occurrenceWeek = weekNumber(term, date)
+        if (occurrenceWeek !in 1..term.weekCount) return emptyList()
+        val scheduleWeek = weekNumber(term, scheduleDate)
+        if (scheduleWeek !in 1..term.weekCount) return emptyList()
 
         val termCourseIds = state.courses.filter { it.termId == term.id && !it.archived }.associateBy { it.id }
         return state.slots.asSequence()
             .filter { it.courseId in termCourseIds }
-            .filter { it.dayOfWeek == date.dayOfWeek.value }
-            .filter { it.weeks.isEmpty() && week in it.startWeek..it.endWeek || week in it.weeks }
+            .filter { it.dayOfWeek == scheduleDate.dayOfWeek.value }
+            .filter { it.weeks.isEmpty() && scheduleWeek in it.startWeek..it.endWeek || scheduleWeek in it.weeks }
             .filter {
                 if (it.weeks.isNotEmpty()) true else when (it.weekPattern) {
                     WeekPattern.EVERY -> true
-                    WeekPattern.ODD -> week % 2 == 1
-                    WeekPattern.EVEN -> week % 2 == 0
+                    WeekPattern.ODD -> scheduleWeek % 2 == 1
+                    WeekPattern.EVEN -> scheduleWeek % 2 == 0
                 }
             }
             .mapNotNull { slot ->
@@ -64,7 +75,10 @@ object ScheduleEngine {
                     start = date.atTime(startTime),
                     end = date.atTime(endTime),
                     room = exception?.replacementRoom ?: slot.room,
-                    note = exception?.note.orEmpty(),
+                    note = listOfNotNull(
+                        dayRule?.takeIf { it.type == CalendarRuleType.FOLLOW_DATE }?.title,
+                        exception?.note?.takeIf(String::isNotBlank),
+                    ).joinToString(" · "),
                 )
             }
             .sortedBy { it.start }
@@ -84,6 +98,12 @@ object ScheduleEngine {
 
     fun currentOrNext(state: AppState, now: LocalDateTime = LocalDateTime.now()): ScheduledClass? =
         upcoming(state, now).firstOrNull()
+
+    fun dayRule(state: AppState, date: LocalDate): CalendarDayRule? {
+        val profile = state.preferences.holidaySync
+        if (!profile.enabled) return null
+        return state.calendarDayRules.find { it.date == date.toString() && it.sourceUrl == profile.sourceUrl }
+    }
 
     fun nextEarlyClass(
         state: AppState,
