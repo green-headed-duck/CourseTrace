@@ -55,4 +55,19 @@ class TimetablePayloadParserTest {
         assertEquals(18, payload.slots.single().endWeek)
         assertEquals("2026-08-31", payload.termStartDate)
     }
+
+    @Test
+    fun acceptsNullWeekRangeFromCompatibleModelsAndMarksItForReview() {
+        val payload = TimetablePayloadParser.parse(
+            """{"termWeekCount":22,"slots":[{"courseName":"大学英语","teacher":null,"dayOfWeek":2,"startPeriod":3,"endPeriod":4,"room":null,"startWeek":null,"endWeek":null,"weekPattern":null,"weeks":null,"confidence":null,"warnings":null}]}""",
+        )
+
+        val slot = payload.slots.single()
+        assertEquals(1, slot.startWeek)
+        assertEquals(22, slot.endWeek)
+        assertEquals("", slot.teacher)
+        assertEquals("", slot.room)
+        assertTrue(slot.weeks.isEmpty())
+        assertTrue(slot.warnings.single().contains("暂按整学期处理"))
+    }
 }

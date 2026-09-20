@@ -8,6 +8,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
@@ -52,6 +53,7 @@ class OpenAiCompatibleClient {
                 只输出一个 JSON 对象，不要 Markdown：
                 {"termName":"2026-2027学年第1学期","termStartDate":null,"termWeekCount":22,"slots":[{"courseName":"","teacher":"","dayOfWeek":1,"startPeriod":1,"endPeriod":2,"startTime":"","endTime":"","room":"","startWeek":3,"endWeek":18,"weekPattern":"EVERY","weeks":[3,4,5,6,7,8,9,10,11,12,15,16,17,18],"confidence":0.95,"warnings":[]}],"unscheduledCourses":[{"courseName":"军事技能","teacher":"","weeks":[13,14],"notes":"无固定星期和节次"}],"warnings":[]}
                 dayOfWeek 为 1..7；节次为 1..11；非空时间必须为 HH:mm；weekPattern 只能为 EVERY、ODD、EVEN。
+                startWeek 和 endWeek 必须是整数；无法确定时暂填 1 和 termWeekCount，并在 warnings 说明，不能写 null。字符串、weeks 和 warnings 也不能写 null。
                 不确定内容写入 warnings 并降低 confidence，禁止猜测看不清的文字。
             """.trimIndent()
             val content = buildJsonArray {
@@ -156,7 +158,11 @@ data class TimetableRecognitionPayload(
 )
 
 object TimetablePayloadParser {
-    private val json = Json { ignoreUnknownKeys = true; isLenient = true }
+    private val json = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+        coerceInputValues = true
+    }
 
     fun parse(
         raw: String,
@@ -170,10 +176,31 @@ object TimetablePayloadParser {
         val start = cleaned.indexOf('{')
         val end = cleaned.lastIndexOf('}')
         require(start >= 0 && end > start) { "没有找到有效的课表 JSON" }
-        val payload = json.decodeFromString<TimetableRecognitionPayload>(cleaned.substring(start, end + 1))
-        val normalized = payload.slots.map { slot ->
+        val jsonText = cleaned.substring(start, end + 1)
+        val root = json.parseToJsonElement(jsonText).jsonObject
+        val nullWeekRanges = root["slots"]?.jsonArray?.map { element ->
+            val slot = element.jsonObject
+            (slot["startWeek"] is JsonNull) to (slot["endWeek"] is JsonNull)
+        }.orEmpty()
+        val payload = json.decodeFromString<TimetableRecognitionPayload>(jsonText)
+        val normalized = payload.slots.mapIndexed { index, decodedSlot ->
+            val nullRange = nullWeekRanges.getOrNull(index) ?: (false to false)
+            val weeks = decodedSlot.weeks.distinct().sorted()
+            val missingWeekWarning = if (weeks.isEmpty() && (nullRange.first || nullRange.second)) {
+                listOf("模型未给出明确周次，已暂按整学期处理，请核对")
+            } else {
+                emptyList()
+            }
+            val slot = decodedSlot.copy(
+                startWeek = if (nullRange.first) weeks.firstOrNull() ?: 1 else decodedSlot.startWeek,
+                endWeek = if (nullRange.second) {
+                    weeks.lastOrNull() ?: payload.termWeekCount ?: 20
+                } else {
+                    decodedSlot.endWeek
+                },
+                warnings = decodedSlot.warnings + missingWeekWarning,
+            )
             require(slot.dayOfWeek in 1..7) { "${slot.courseName} 的星期无效" }
-            val weeks = slot.weeks.distinct().sorted()
             require(weeks.all { it in 1..40 }) { "${slot.courseName} 的周次无效" }
             require(weeks.isNotEmpty() || slot.startWeek >= 1 && slot.endWeek >= slot.startWeek) { "${slot.courseName} 的周次无效" }
             val firstPeriod = slot.startPeriod ?: slot.endPeriod

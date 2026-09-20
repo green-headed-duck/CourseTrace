@@ -84,8 +84,8 @@ ChatGPT 无法被动读取其他历史会话。只有 Skill 活跃时追加或�
 ```powershell
 .\tools\sign-update-manifest.ps1 `
   -ApkPath .\app\build\outputs\apk\release\app-release.apk `
-  -VersionCode 18 -VersionName 0.3.4 `
-  -ApkUrl https://github.com/green-headed-duck/CourseTrace/releases/download/v0.3.4/CourseTrace-0.3.4-release.apk
+  -VersionCode 19 -VersionName 0.3.5 `
+  -ApkUrl https://github.com/green-headed-duck/CourseTrace/releases/download/v0.3.5/CourseTrace-0.3.5-release.apk
 ```
 
 将生成的 `update-manifest.json` 提交到仓库 `main` 分支，并把 APK 上传到相应 GitHub Release。后续版本必须沿用同一 Android keystore 和更新清单私钥。设置页仍允许高级用户替换其他 HTTPS 签名清单。
@@ -96,4 +96,4 @@ ChatGPT 无法被动读取其他历史会话。只有 Skill 活跃时追加或�
 
 ## 当前验证版本
 
-`0.3.4`（versionCode 18）新增无需 API Key 的 DeepSeek 课表识别流程：复制版式对应提示词、上传 PDF/截图、粘贴完整 JSON，随后沿用安全的草稿核对与重复导入保护。API 自动识别、词迹只读联动、调休映射和免登录更新继续保留。
+`0.3.5`（versionCode 19）修复兼容模型识别 PDF 时以 `null` 返回起止周次导致整份导入失败的问题。解析器会对这类空值安全回退并在草稿中提示核对；0.3.4 的 DeepSeek 纯文本导入、API 自动识别、词迹只读联动、调休映射和免登录更新继续保留。

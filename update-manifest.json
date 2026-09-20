@@ -1,9 +1,9 @@
 {
-  "versionCode": 18,
-  "versionName": "0.3.4",
-  "apkUrl": "https://github.com/green-headed-duck/CourseTrace/releases/download/v0.3.4/CourseTrace-0.3.4-release.apk",
-  "sha256": "291267876d6ed6543a59350d407c81617ea68e0a1dfff40c60d781cdd60f12eb",
-  "signature": "MEUCIEToAjlZNY2yLuwJdz82jl/iJkTimPNxDBuCGmZUfpVfAiEA2hXD4AMX2FrukOVCSIn1F4iAGJezB/VwbqNTyhVXhis=",
+  "versionCode": 19,
+  "versionName": "0.3.5",
+  "apkUrl": "https://github.com/green-headed-duck/CourseTrace/releases/download/v0.3.5/CourseTrace-0.3.5-release.apk",
+  "sha256": "052c712f14b37f1f8188dc0c2cc79803edc0f68c5f7a23473bdb64c4ee299790",
+  "signature": "MEYCIQDf6ANraNgvprJMsmXLXTKQNV5vFMjGmH3B8gy6LasM9QIhAI8iAechdZMpwyq5J2pkyaHOnEbeIu9bo04h8Rgr/ifW",
   "channel": "stable",
-  "notes": "新增无需 API Key 的 DeepSeek 课表识别：复制提示词、上传 PDF 或截图、粘贴 JSON 并核对导入。"
+  "notes": "修复 gpt-5.6-luna 返回空周次导致 PDF 课表解析失败；空值会安全回退并提示核对。"
 }
