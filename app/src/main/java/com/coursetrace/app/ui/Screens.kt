@@ -156,7 +156,7 @@ fun TodayScreen(
                 Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                QuickAction("导入 PDF", Icons.Filled.PictureAsPdf, onImportPdf)
+                QuickAction("导入课表", Icons.Filled.PictureAsPdf, onImportPdf)
                 QuickAction("添加课程", Icons.Filled.EditCalendar, onAddCourse)
                 QuickAction("课堂记录", Icons.Filled.PlayArrow) {
                     next?.let { onStartSession(it.course.id, "course", it.course.name) }
@@ -265,12 +265,12 @@ private fun EmptyTodayCard(onImportPdf: () -> Unit, onAddCourse: () -> Unit, fin
             fontWeight = FontWeight.Bold,
         )
         Text(
-            if (finished) "今日课程记录仍可在下方查看。" else "从 PDF 识别，或手动添加第一节课。",
+            if (finished) "今日课程记录仍可在下方查看。" else "从 PDF 或图片识别，或手动添加第一节课。",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(16.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Button(onClick = onImportPdf) { Text("导入 PDF") }
+            Button(onClick = onImportPdf) { Text("导入课表") }
             OutlinedButton(onClick = onAddCourse) { Text("手动添加") }
         }
     }
@@ -446,7 +446,7 @@ fun ScheduleScreen(
                         Text("这一天没有课程", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text("支持单双周、调课和跨学期管理。", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(Modifier.height(14.dp))
-                        OutlinedButton(onClick = onImportPdf) { Text("从 PDF 导入") }
+                        OutlinedButton(onClick = onImportPdf) { Text("导入课表") }
                     }
                 }
             } else if (!weekOverview) {

@@ -2,6 +2,8 @@
 
 package com.coursetrace.app.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
@@ -67,18 +69,130 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.coursetrace.app.domain.AcademicTermPolicy
 import com.coursetrace.app.domain.ScheduleEngine
+import com.coursetrace.app.data.TimetablePrompts
 import com.coursetrace.app.model.AppState
 import com.coursetrace.app.model.Course
 import com.coursetrace.app.model.CourseSlot
 import com.coursetrace.app.model.LearningEvent
 import com.coursetrace.app.model.LearningEventKind
 import com.coursetrace.app.model.LearningSession
+import com.coursetrace.app.model.ScheduleTimeProfile
 import com.coursetrace.app.model.Term
 import com.coursetrace.app.model.WeekPattern
 import java.time.OffsetDateTime
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+
+@Composable
+fun TimetableImportDialog(
+    timeProfile: ScheduleTimeProfile,
+    hasApiKey: Boolean,
+    onDismiss: () -> Unit,
+    onApiImport: () -> Unit,
+    onImportJson: (String) -> Unit,
+) {
+    val context = LocalContext.current
+    val options = remember(timeProfile) { TimetablePrompts.deepSeekOptions(timeProfile) }
+    var jsonText by remember { mutableStateOf("") }
+    var localMessage by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("导入课程表") },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text("选一种识别方式。无论从哪里识别，结果都会先生成草稿，核对后才写入当前学期。")
+
+                Text("API 自动识别", fontWeight = FontWeight.SemiBold)
+                OutlinedButton(
+                    onClick = onApiImport,
+                    enabled = hasApiKey,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("选择 PDF 并自动识别") }
+                if (!hasApiKey) {
+                    Text(
+                        "尚未配置 API Key，可以直接使用下方的 DeepSeek 手动识别。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                HorizontalDivider()
+                Text("不用 API：发给 DeepSeek", fontWeight = FontWeight.SemiBold)
+                Text(
+                    "先复制合适的提示词，在 DeepSeek 中上传 PDF 或截图并发送。拿到回复后，回到这里粘贴整个 JSON。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                options.forEach { option ->
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        OutlinedButton(
+                            onClick = {
+                                context.getSystemService(ClipboardManager::class.java).setPrimaryClip(
+                                    ClipData.newPlainText("课迹 · ${option.title}", option.prompt),
+                                )
+                                localMessage = "已复制“${option.title}”提示词"
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text("复制${option.title}提示词") }
+                        Text(
+                            option.description,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                Text(
+                    "上传到 DeepSeek 前，请先确认课表里没有不想交给第三方处理的个人信息。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+
+                HorizontalDivider()
+                Text("把识别结果交回课迹", fontWeight = FontWeight.SemiBold)
+                OutlinedButton(
+                    onClick = {
+                        val clipboard = context.getSystemService(ClipboardManager::class.java)
+                        jsonText = clipboard.primaryClip
+                            ?.takeIf { it.itemCount > 0 }
+                            ?.getItemAt(0)
+                            ?.coerceToText(context)
+                            ?.toString()
+                            .orEmpty()
+                        localMessage = if (jsonText.isBlank()) "剪贴板里没有文字" else "已从剪贴板粘贴"
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("从剪贴板粘贴") }
+                OutlinedTextField(
+                    value = jsonText,
+                    onValueChange = { jsonText = it },
+                    label = { Text("DeepSeek 返回的完整 JSON") },
+                    supportingText = { Text("不要只粘贴 slots 数组，也不要粘贴 DeepSeek 的思考过程") },
+                    minLines = 4,
+                    maxLines = 10,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                localMessage?.let {
+                    Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onImportJson(jsonText.trim())
+                    onDismiss()
+                },
+                enabled = jsonText.isNotBlank(),
+            ) { Text("生成待核对草稿") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("关闭") } },
+    )
+}
 
 @Composable
 fun AddCourseDialog(

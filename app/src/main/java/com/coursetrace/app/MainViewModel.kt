@@ -312,6 +312,52 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
+    fun importTimetableJson(text: String) {
+        if (!timetableImportMutex.tryLock()) {
+            _workStatus.value = _workStatus.value.copy(
+                busy = true,
+                detail = "已忽略重复导入操作，请等待当前任务完成",
+            )
+            return
+        }
+        viewModelScope.launch {
+            try {
+                _workStatus.value = WorkStatus(busy = true, message = "正在解析 DeepSeek 课表…")
+                runCatching {
+                    require(text.isNotBlank()) { "请粘贴 DeepSeek 返回的完整 JSON" }
+                    val payload = TimetablePayloadParser.parse(
+                        text,
+                        appState.value.preferences.scheduleTimeProfile,
+                    )
+                    require(payload.slots.isNotEmpty() || payload.unscheduledCourses.isNotEmpty()) {
+                        "没有识别到可导入的课程，请确认粘贴的是完整 JSON"
+                    }
+                    val fingerprint = timetableTextFingerprint(text)
+                    val draft = ImportDraft(
+                        createdAt = OffsetDateTime.now().toString(),
+                        source = ImportSource.CHATGPT_MOBILE,
+                        sourceName = "DeepSeek 手动识别",
+                        slots = payload.slots,
+                        unscheduledCourses = payload.unscheduledCourses,
+                        warnings = payload.warnings,
+                        termName = payload.termName,
+                        termStartDate = payload.termStartDate,
+                        termWeekCount = payload.termWeekCount,
+                        sourceFingerprint = fingerprint,
+                    )
+                    app.repository.saveImportDraft(draft)
+                    draft
+                }.onSuccess { draft ->
+                    _workStatus.value = WorkStatus(
+                        message = "已生成 DeepSeek 课表草稿，请核对 ${draft.slots.size} 条课程后再确认导入",
+                    )
+                }.onFailure(::showError)
+            } finally {
+                timetableImportMutex.unlock()
+            }
+        }
+    }
+
     fun importChatGptShare(text: String) {
         viewModelScope.launch {
             val draft = runCatching {
@@ -319,18 +365,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 ImportDraft(
                     createdAt = OffsetDateTime.now().toString(),
                     source = ImportSource.CHATGPT_MOBILE,
-                    sourceName = "ChatGPT Mobile 分享",
+                    sourceName = "聊天模型分享",
                     slots = payload.slots,
                     unscheduledCourses = payload.unscheduledCourses,
                     warnings = payload.warnings,
                     termName = payload.termName,
                     termStartDate = payload.termStartDate,
                     termWeekCount = payload.termWeekCount,
+                    sourceFingerprint = timetableTextFingerprint(text),
                 )
             }.getOrNull()
             if (draft != null) {
-                app.repository.saveImportDraft(draft)
-                _workStatus.value = WorkStatus(message = "已接收 ChatGPT 课表草稿，请先核对")
+                runCatching { app.repository.saveImportDraft(draft) }
+                    .onSuccess { _workStatus.value = WorkStatus(message = "已接收聊天模型课表草稿，请先核对") }
+                    .onFailure(::showError)
                 return@launch
             }
             runCatching {
@@ -707,6 +755,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         ?: "未知分类"
 
     fun todayClasses() = ScheduleEngine.classesOn(appState.value, LocalDate.now())
+
+    private fun timetableTextFingerprint(text: String): String = MessageDigest.getInstance("SHA-256")
+        .digest(text.trim().toByteArray(Charsets.UTF_8))
+        .joinToString("") { "%02x".format(it) }
 
     private fun showError(error: Throwable) {
         _workStatus.value = WorkStatus(message = error.message ?: "操作失败")

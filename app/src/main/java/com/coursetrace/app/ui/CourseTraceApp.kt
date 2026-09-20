@@ -84,6 +84,7 @@ fun CourseTraceApp(viewModel: MainViewModel) {
     var pendingMaterialOwner by remember { mutableStateOf<MaterialOwner?>(null) }
     var showBackupDialog by rememberSaveable { mutableStateOf(false) }
     var showRestoreDialog by rememberSaveable { mutableStateOf(false) }
+    var showTimetableImportDialog by rememberSaveable { mutableStateOf(false) }
     var pendingBackupPassword by remember { mutableStateOf<CharArray?>(null) }
 
     val pdfPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -192,7 +193,7 @@ fun CourseTraceApp(viewModel: MainViewModel) {
                             MainSection.TODAY -> TodayScreen(
                                 state = appState,
                                 activeSession = activeSession,
-                                onImportPdf = { pdfPicker.launch(arrayOf("application/pdf")) },
+                                onImportPdf = { showTimetableImportDialog = true },
                                 onAddCourse = { showAddCourse = true },
                                 onCourseClick = { selectedCourse = it },
                                 onStartSession = viewModel::startSession,
@@ -201,7 +202,7 @@ fun CourseTraceApp(viewModel: MainViewModel) {
                             MainSection.SCHEDULE -> ScheduleScreen(
                                 state = appState,
                                 onAddCourse = { showAddCourse = true },
-                                onImportPdf = { pdfPicker.launch(arrayOf("application/pdf")) },
+                                onImportPdf = { showTimetableImportDialog = true },
                                 onCourseClick = { selectedCourse = it },
                                 onCommitImport = viewModel::commitImport,
                                 onManageTerms = { showTermManager = true },
@@ -284,6 +285,19 @@ fun CourseTraceApp(viewModel: MainViewModel) {
                 }
             }
         }
+    }
+
+    if (showTimetableImportDialog) {
+        TimetableImportDialog(
+            timeProfile = appState.preferences.scheduleTimeProfile,
+            hasApiKey = viewModel.hasApiKey(),
+            onDismiss = { showTimetableImportDialog = false },
+            onApiImport = {
+                showTimetableImportDialog = false
+                pdfPicker.launch(arrayOf("application/pdf"))
+            },
+            onImportJson = { json -> viewModel.importTimetableJson(json) },
+        )
     }
 
     AnimatedVisibility(showAddCourse) {

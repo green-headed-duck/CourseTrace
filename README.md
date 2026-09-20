@@ -16,11 +16,12 @@
 ## 已实现
 
 - Kotlin + Jetpack Compose Material 3；系统深浅色、动态/自定义主题色、自定义照片背景、横竖屏和宽屏自适应。
-- 多学期、单双周/指定周、课程时间与教室；PDF 识别草稿必须预览后才写入。
+- 多学期、单双周/指定周、课程时间与教室；PDF 或图片的识别结果必须预览后才写入。
 - 华南理工大学大学城/国际校区第 1—11 节作息模板；PDF 只有“第几节”时自动换算准确时间。
 - 今日、周总览、课程编辑/移出课表，以及“下一节课”桌面组件。
 - 默认自动应用国家法定节假日：放假日停止排课，调休工作日明确标注；调休日可快捷选择“将 A 日改为 B 日课表”，本地选择不会被联网同步覆盖。支持更换可信的 HTTPS JSON 来源，数据源也可用 `FOLLOW_DATE` 明确指定。
-- OpenAI 兼容中转接口，默认配置 `https://api.apiyi.com/v1` / `gpt-5.6-luna`；模型名可单独编辑，Key 仅存 Android Keystore。
+- 两种课表识别路径：OpenAI 兼容中转接口自动识别，以及无需 API Key 的 DeepSeek 手动识别。后者内置普通 PDF、只有节次、扫描件/截图三种可复制提示词，返回的完整 JSON 可从剪贴板生成待核对草稿。
+- API 路径默认配置 `https://api.apiyi.com/v1` / `gpt-5.6-luna`；模型名可单独编辑，Key 仅存 Android Keystore。
 - ChatGPT Mobile 系统分享与课堂 JSON 专用导入；摘要、问题、错题、痛点、进度、结论和原文分别归档，不必猜测粘贴框。另有为未来/兼容工作区准备的自托管 CourseTrace MCP 中继；ChatGPT Pro 推理与 PDF API 中转互不混用。
 - 与“词迹 CETTrace”通过 Android 只读数据桥无感联动：只共享当天课程的开始与结束时间，用于自动避让；不共享课程名、教师、教室或课堂记录。调用方必须同时匹配固定包名和签名证书。
 - 上课前默认 15 分钟本地提醒、Android 16 临近/上课实时更新样式、点通知直达对应课程；精确提醒无权限时自动降级。
@@ -47,8 +48,8 @@ $env:JAVA_HOME = '你的 JDK 17 路径'
 
 1. 安装签名 Release APK，授予通知权限；在“设置 → 上课提醒”允许精确提醒。
    如需桌面组件，长按手机桌面，选择“小部件/桌面组件 → 课迹 → 下一节课”。Android 不允许应用静默把组件放到桌面。
-2. 在“设置 → PDF 识别接口”填入 API Key。默认中转站和模型已经预填，可先点“测试连接”。Key 不会进入仓库或 APK。
-3. 从系统文件选择器选课程表 PDF，核对置信度、单双周、时间与教室后再确认导入。
+2. 点击“导入课表”：有 API Key 时可选 PDF 自动识别；没有 API Key 时，复制适合课表版式的 DeepSeek 提示词，在 DeepSeek 上传 PDF 或截图，再把完整 JSON 粘贴回课迹。API Key 是可选项。
+3. 核对识别草稿中的置信度、单双周、周次、时间与教室后再确认导入。聊天模型给出的学期日期不会擅自修改当前教学周锚点。
 4. 在课程详情中归档课件；文件仍由系统文档提供器管理，课迹只保留持续授权的 URI 和校验值。
 5. 个人 Pro 手机端使用“复制课堂指令 → 在 ChatGPT 聊天 → 下课时复制 JSON → 课程记录页的‘粘贴 ChatGPT JSON’”。JSON 不要粘入手动过程、摘要或普通原文框。也可直接通过系统分享把普通聊天原文送回课迹；这些路径不需要 OpenAI API。
 6. “设置 → 关于与支持 → GitHub”可直达源码、历史版本下载和问题反馈页面。
@@ -83,8 +84,8 @@ ChatGPT 无法被动读取其他历史会话。只有 Skill 活跃时追加或�
 ```powershell
 .\tools\sign-update-manifest.ps1 `
   -ApkPath .\app\build\outputs\apk\release\app-release.apk `
-  -VersionCode 17 -VersionName 0.3.3 `
-  -ApkUrl https://github.com/green-headed-duck/CourseTrace/releases/download/v0.3.3/CourseTrace-0.3.3-release.apk
+  -VersionCode 18 -VersionName 0.3.4 `
+  -ApkUrl https://github.com/green-headed-duck/CourseTrace/releases/download/v0.3.4/CourseTrace-0.3.4-release.apk
 ```
 
 将生成的 `update-manifest.json` 提交到仓库 `main` 分支，并把 APK 上传到相应 GitHub Release。后续版本必须沿用同一 Android keystore 和更新清单私钥。设置页仍允许高级用户替换其他 HTTPS 签名清单。
@@ -95,4 +96,4 @@ ChatGPT 无法被动读取其他历史会话。只有 Skill 活跃时追加或�
 
 ## 当前验证版本
 
-`0.3.3`（versionCode 17）新增与词迹 CETTrace 的安全只读课程占用联动。课迹只返回经过节假日、调休、单双周、指定周和临时取消规则计算后的起止时间，并在本地课表变化后通知词迹自动刷新；0.3.2 的调休 A→B 映射与 0.3.1 的免登录 GitHub 一键更新继续保留。
+`0.3.4`（versionCode 18）新增无需 API Key 的 DeepSeek 课表识别流程：复制版式对应提示词、上传 PDF/截图、粘贴完整 JSON，随后沿用安全的草稿核对与重复导入保护。API 自动识别、词迹只读联动、调休映射和免登录更新继续保留。

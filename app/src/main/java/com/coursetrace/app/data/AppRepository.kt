@@ -327,7 +327,7 @@ class AppRepository(context: Context) {
         update("创建课表导入草稿：${draft.sourceName}") { state ->
             if (draft.sourceFingerprint.isNotBlank()) {
                 require(draft.sourceFingerprint !in state.appliedImportFingerprints) {
-                    "这个 PDF 已经成功导入过，无需重复导入"
+                    "这份课表已经成功导入过，无需重复导入"
                 }
                 if (state.importDrafts.any { it.sourceFingerprint == draft.sourceFingerprint }) {
                     return@update state
@@ -343,7 +343,7 @@ class AppRepository(context: Context) {
         val draft = state.importDrafts.find { it.id == draftId }
             ?: error("该导入草稿已被处理，请勿重复点击")
         require(draft.sourceFingerprint.isBlank() || draft.sourceFingerprint !in state.appliedImportFingerprints) {
-            "这个 PDF 已经成功导入过，无需重复导入"
+            "这份课表已经成功导入过，无需重复导入"
         }
         val currentTermId = state.activeTermId ?: state.terms.firstOrNull { !it.archived }?.id
             ?: error("请先创建学期")
